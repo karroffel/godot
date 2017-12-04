@@ -29,6 +29,7 @@
 /*************************************************************************/
 
 #include "os_x11.h"
+#include "drivers/gles2/rasterizer_gles2.h"
 #include "drivers/gles3/rasterizer_gles3.h"
 #include "errno.h"
 #include "key_mapping_x11.h"
@@ -289,8 +290,8 @@ Error OS_X11::initialize(const VideoMode &p_desired, int p_video_driver, int p_a
 
 	switch (opengl_api_type) {
 		case ContextGL_X11::ContextType::GLES_2_0_COMPATIBLE: {
-			// RasterizerGLES2::register_config();
-			// RasterizerGLES2::make_current();
+			RasterizerGLES2::register_config();
+			RasterizerGLES2::make_current();
 		} break;
 		case ContextGL_X11::ContextType::GLES_3_0_COMPATIBLE: {
 			RasterizerGLES3::register_config();
