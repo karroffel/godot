@@ -51,6 +51,68 @@ public:
 	RasterizerCanvasGLES2 *canvas;
 	RasterizerSceneGLES2 *scene;
 
+	static GLuint system_fbo;
+
+	struct Config {
+
+		bool shrink_textures_x2;
+		bool use_fast_texture_filter;
+		// bool use_anisotropic_filter;
+
+		bool hdr_supported;
+
+		bool use_rgba_2d_shadows;
+
+		// float anisotropic_level;
+
+		int max_texture_image_units;
+		int max_texture_size;
+
+		bool generate_wireframes;
+
+		bool use_texture_array_environment;
+
+		Set<String> extensions;
+
+		bool keep_original_textures;
+
+		bool no_depth_prepass;
+		bool force_vertex_shading;
+	} config;
+
+	struct Info {
+
+		uint64_t texture_mem;
+		uint64_t vertex_mem;
+
+		struct Render {
+			uint32_t object_count;
+			uint32_t draw_call_count;
+			uint32_t material_switch_count;
+			uint32_t surface_switch_count;
+			uint32_t shader_rebind_count;
+			uint32_t vertices_count;
+
+			void reset() {
+				object_count = 0;
+				draw_call_count = 0;
+				material_switch_count = 0;
+				surface_switch_count = 0;
+				shader_rebind_count = 0;
+				vertices_count = 0;
+			}
+		} render, render_final, snap;
+
+		Info() {
+
+			texture_mem = 0;
+			vertex_mem = 0;
+			render.reset();
+			render_final.reset();
+		}
+
+	} info;
+
 	/////////////////////////////////////////////////////////////////////////////////////////
 	//////////////////////////////////DATA///////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////////////////////////////////////
@@ -60,6 +122,65 @@ public:
 	/////////////////////////////////////////////////////////////////////////////////////////
 
 	/* TEXTURE API */
+
+	struct Texture : RID_Data {
+		String path;
+		uint32_t flags;
+		int width, height;
+		int alloc_width, alloc_height;
+		Image::Format format;
+
+		GLenum target;
+		GLenum gl_format_cache;
+		GLenum gl_internal_format_cache;
+		GLenum gl_type_cache;
+
+		int data_size;
+		int total_data_size;
+		bool ignore_mipmaps;
+
+		int mipmaps;
+
+		bool active;
+		GLenum tex_id;
+
+		uint16_t stored_cube_sides;
+
+		// RenderTarget *render_target;
+
+		Ref<Image> images[6];
+
+		Texture() {
+			flags = 0;
+			width = 0;
+			height = 0;
+			alloc_width = 0;
+			alloc_height = 0;
+			format = Image::FORMAT_L8;
+
+			target = 0;
+
+			data_size = 0;
+			total_data_size = 0;
+			ignore_mipmaps = false;
+
+			active = false;
+
+			tex_id = 0;
+
+			stored_cube_sides = 0;
+		}
+
+		~Texture() {
+			if (tex_id != 0) {
+				glDeleteTextures(1, &tex_id);
+			}
+		}
+	};
+
+	mutable RID_Owner<Texture> texture_owner;
+
+	Ref<Image> _get_gl_image_and_format(const Ref<Image> &p_image, Image::Format p_format, uint32_t p_flags, GLenum &r_gl_format, GLenum &r_gl_internal_format, GLenum &r_gl_type);
 
 	virtual RID texture_create();
 	virtual void texture_allocate(RID p_texture, int p_width, int p_height, Image::Format p_format, uint32_t p_flags = VS::TEXTURE_FLAGS_DEFAULT);

@@ -32,58 +32,581 @@
 #include "rasterizer_canvas_gles2.h"
 #include "rasterizer_scene_gles2.h"
 
+GLuint RasterizerStorageGLES2::system_fbo;
+
 /* TEXTURE API */
+
+Ref<Image> RasterizerStorageGLES2::_get_gl_image_and_format(const Ref<Image> &p_image, Image::Format p_format, uint32_t p_flags, GLenum &r_gl_format, GLenum &r_gl_internal_format, GLenum &r_gl_type) {
+
+	r_gl_format = 0;
+	Ref<Image> image = p_image;
+
+	bool need_decompress = false;
+
+	switch (p_format) {
+
+		case Image::FORMAT_L8: {
+
+			r_gl_internal_format = GL_LUMINANCE;
+			r_gl_format = GL_LUMINANCE;
+			r_gl_type = GL_UNSIGNED_BYTE;
+		} break;
+		case Image::FORMAT_LA8: {
+			r_gl_internal_format = GL_LUMINANCE_ALPHA;
+			r_gl_format = GL_LUMINANCE_ALPHA;
+			r_gl_type = GL_UNSIGNED_BYTE;
+		} break;
+		case Image::FORMAT_R8: {
+
+			r_gl_internal_format = GL_ALPHA;
+			r_gl_format = GL_ALPHA;
+			r_gl_type = GL_UNSIGNED_BYTE;
+
+		} break;
+		case Image::FORMAT_RG8: {
+
+			ERR_EXPLAIN("RG texture not supported");
+			ERR_FAIL_V(image);
+
+		} break;
+		case Image::FORMAT_RGB8: {
+
+			r_gl_internal_format = GL_RGB;
+			r_gl_format = GL_RGB;
+			r_gl_type = GL_UNSIGNED_BYTE;
+
+		} break;
+		case Image::FORMAT_RGBA8: {
+
+			r_gl_format = GL_RGBA;
+			r_gl_internal_format = GL_RGBA;
+			r_gl_type = GL_UNSIGNED_BYTE;
+
+		} break;
+		case Image::FORMAT_RGBA4444: {
+
+			r_gl_internal_format = GL_RGBA;
+			r_gl_format = GL_RGBA;
+			r_gl_type = GL_UNSIGNED_SHORT_4_4_4_4;
+
+		} break;
+		case Image::FORMAT_RGBA5551: {
+
+			r_gl_internal_format = GL_RGB5_A1;
+			r_gl_format = GL_RGBA;
+			r_gl_type = GL_UNSIGNED_SHORT_5_5_5_1;
+
+		} break;
+		case Image::FORMAT_RF: {
+			ERR_EXPLAIN("R float texture not supported");
+			ERR_FAIL_V(image);
+
+		} break;
+		case Image::FORMAT_RGF: {
+			ERR_EXPLAIN("RG float texture not supported");
+			ERR_FAIL_V(image);
+
+		} break;
+		case Image::FORMAT_RGBF: {
+
+			ERR_EXPLAIN("RGB float texture not supported");
+			ERR_FAIL_V(image);
+
+		} break;
+		case Image::FORMAT_RGBAF: {
+
+			ERR_EXPLAIN("RGBA float texture not supported");
+			ERR_FAIL_V(image);
+
+		} break;
+		case Image::FORMAT_RH: {
+			ERR_EXPLAIN("R half float texture not supported");
+			ERR_FAIL_V(image);
+		} break;
+		case Image::FORMAT_RGH: {
+			ERR_EXPLAIN("RG half float texture not supported");
+			ERR_FAIL_V(image);
+
+		} break;
+		case Image::FORMAT_RGBH: {
+			ERR_EXPLAIN("RGB half float texture not supported");
+			ERR_FAIL_V(image);
+
+		} break;
+		case Image::FORMAT_RGBAH: {
+			ERR_EXPLAIN("RGBA half float texture not supported");
+			ERR_FAIL_V(image);
+
+		} break;
+		case Image::FORMAT_RGBE9995: {
+			ERR_EXPLAIN("RGBA float texture not supported");
+			ERR_FAIL_V(image);
+
+		} break;
+		case Image::FORMAT_DXT1: {
+
+			need_decompress = true;
+
+		} break;
+		case Image::FORMAT_DXT3: {
+
+			need_decompress = true;
+
+		} break;
+		case Image::FORMAT_DXT5: {
+
+			need_decompress = true;
+
+		} break;
+		case Image::FORMAT_RGTC_R: {
+
+			need_decompress = true;
+
+		} break;
+		case Image::FORMAT_RGTC_RG: {
+
+			need_decompress = true;
+
+		} break;
+		case Image::FORMAT_BPTC_RGBA: {
+
+			need_decompress = true;
+		} break;
+		case Image::FORMAT_BPTC_RGBF: {
+
+			need_decompress = true;
+		} break;
+		case Image::FORMAT_BPTC_RGBFU: {
+
+			need_decompress = true;
+		} break;
+		case Image::FORMAT_PVRTC2: {
+
+			need_decompress = true;
+		} break;
+		case Image::FORMAT_PVRTC2A: {
+
+			need_decompress = true;
+		} break;
+		case Image::FORMAT_PVRTC4: {
+
+			need_decompress = true;
+		} break;
+		case Image::FORMAT_PVRTC4A: {
+
+			need_decompress = true;
+		} break;
+		case Image::FORMAT_ETC: {
+
+			need_decompress = true;
+		} break;
+		case Image::FORMAT_ETC2_R11: {
+
+			need_decompress = true;
+		} break;
+		case Image::FORMAT_ETC2_R11S: {
+
+			need_decompress = true;
+		} break;
+		case Image::FORMAT_ETC2_RG11: {
+
+			need_decompress = true;
+		} break;
+		case Image::FORMAT_ETC2_RG11S: {
+
+			need_decompress = true;
+		} break;
+		case Image::FORMAT_ETC2_RGB8: {
+
+			need_decompress = true;
+		} break;
+		case Image::FORMAT_ETC2_RGBA8: {
+
+			need_decompress = true;
+		} break;
+		case Image::FORMAT_ETC2_RGB8A1: {
+
+			need_decompress = true;
+		} break;
+		default: {
+
+			ERR_FAIL_V(Ref<Image>());
+		}
+	}
+
+	if (need_decompress) {
+
+		if (!image.is_null()) {
+			image = image->duplicate();
+			image->decompress();
+			ERR_FAIL_COND_V(image->is_compressed(), image);
+			image->convert(Image::FORMAT_RGBA8);
+		}
+
+		r_gl_format = GL_RGBA;
+		r_gl_internal_format = GL_RGBA;
+		r_gl_type = GL_UNSIGNED_BYTE;
+
+		return image;
+	}
+
+	return p_image;
+}
+
+static const GLenum _cube_side_enum[6] = {
+
+	GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+	GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+	GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+	GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
+	GL_TEXTURE_CUBE_MAP_NEGATIVE_Z,
+	GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
+
+};
 
 RID RasterizerStorageGLES2::texture_create() {
 
-	return RID();
+	Texture *texture = memnew(Texture);
+	ERR_FAIL_COND_V(!texture, RID());
+	glGenTextures(1, &texture->tex_id);
+	texture->active = false;
+	texture->total_data_size = 0;
+
+	return texture_owner.make_rid(texture);
 }
 
 void RasterizerStorageGLES2::texture_allocate(RID p_texture, int p_width, int p_height, Image::Format p_format, uint32_t p_flags) {
+	GLenum format;
+	GLenum internal_format;
+	GLenum type;
+
+	if (p_flags & VS::TEXTURE_FLAG_USED_FOR_STREAMING) {
+		p_flags &= ~VS::TEXTURE_FLAG_MIPMAPS; // no mipies for video
+	}
+
+	Texture *texture = texture_owner.get(p_texture);
+	ERR_FAIL_COND(!texture);
+	texture->width = p_width;
+	texture->height = p_height;
+	texture->format = p_format;
+	texture->flags = p_flags;
+	texture->stored_cube_sides = 0;
+	texture->target = (p_flags & VS::TEXTURE_FLAG_CUBEMAP) ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D;
+
+	_get_gl_image_and_format(Ref<Image>(), texture->format, texture->flags, format, internal_format, type);
+
+	texture->alloc_width = texture->width;
+	texture->alloc_height = texture->height;
+
+	texture->gl_format_cache = format;
+	texture->gl_type_cache = type;
+	texture->gl_internal_format_cache = internal_format;
+	texture->data_size = 0;
+	texture->mipmaps = 1;
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(texture->target, texture->tex_id);
+
+	if (p_flags & VS::TEXTURE_FLAG_USED_FOR_STREAMING) {
+		//prealloc if video
+		glTexImage2D(texture->target, 0, internal_format, p_width, p_height, 0, format, type, NULL);
+	}
+
+	texture->active = true;
 }
 
 void RasterizerStorageGLES2::texture_set_data(RID p_texture, const Ref<Image> &p_image, VS::CubeMapSide p_cube_side) {
+	Texture *texture = texture_owner.get(p_texture);
+
+	ERR_FAIL_COND(!texture);
+	ERR_FAIL_COND(!texture->active);
+	// ERR_FAIL_COND(texture->render_target);
+	ERR_FAIL_COND(texture->format != p_image->get_format());
+	ERR_FAIL_COND(p_image.is_null());
+
+	GLenum type;
+	GLenum format;
+	GLenum internal_format;
+	bool compressed;
+	bool srgb;
+
+	if (config.keep_original_textures && !(texture->flags & VS::TEXTURE_FLAG_USED_FOR_STREAMING)) {
+		texture->images[p_cube_side] = p_image;
+	}
+
+	Ref<Image> img = _get_gl_image_and_format(p_image, p_image->get_format(), texture->flags, format, internal_format, type);
+
+	if (config.shrink_textures_x2 && (p_image->has_mipmaps() || !p_image->is_compressed()) && !(texture->flags & VS::TEXTURE_FLAG_USED_FOR_STREAMING)) {
+
+		texture->alloc_height = MAX(1, texture->alloc_height / 2);
+		texture->alloc_width = MAX(1, texture->alloc_width / 2);
+
+		if (texture->alloc_width == img->get_width() / 2 && texture->alloc_height == img->get_height() / 2) {
+
+			img->shrink_x2();
+		} else if (img->get_format() <= Image::FORMAT_RGBA8) {
+
+			img->resize(texture->alloc_width, texture->alloc_height, Image::INTERPOLATE_BILINEAR);
+		}
+	};
+
+	GLenum blit_target = (texture->target == GL_TEXTURE_CUBE_MAP) ? _cube_side_enum[p_cube_side] : GL_TEXTURE_2D;
+
+	texture->data_size = img->get_data().size();
+	PoolVector<uint8_t>::Read read = img->get_data().read();
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(texture->target, texture->tex_id);
+
+	texture->ignore_mipmaps = compressed && !img->has_mipmaps();
+
+	if ((texture->flags & VS::TEXTURE_FLAG_MIPMAPS) && !texture->ignore_mipmaps)
+		glTexParameteri(texture->target, GL_TEXTURE_MIN_FILTER, config.use_fast_texture_filter ? GL_LINEAR_MIPMAP_NEAREST : GL_LINEAR_MIPMAP_LINEAR);
+	else {
+		if (texture->flags & VS::TEXTURE_FLAG_FILTER) {
+			glTexParameteri(texture->target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		} else {
+			glTexParameteri(texture->target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		}
+	}
+
+	if (texture->flags & VS::TEXTURE_FLAG_FILTER) {
+
+		glTexParameteri(texture->target, GL_TEXTURE_MAG_FILTER, GL_LINEAR); // Linear Filtering
+
+	} else {
+
+		glTexParameteri(texture->target, GL_TEXTURE_MAG_FILTER, GL_NEAREST); // raw Filtering
+	}
+
+	if (((texture->flags & VS::TEXTURE_FLAG_REPEAT) || (texture->flags & VS::TEXTURE_FLAG_MIRRORED_REPEAT)) && texture->target != GL_TEXTURE_CUBE_MAP) {
+
+		if (texture->flags & VS::TEXTURE_FLAG_MIRRORED_REPEAT) {
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+		} else {
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		}
+	} else {
+
+		//glTexParameterf( texture->target, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE );
+		glTexParameterf(texture->target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameterf(texture->target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	}
+
+//set swizle for older format compatibility
+#ifdef GLES_OVER_GL
+	switch (texture->format) {
+
+		case Image::FORMAT_L8: {
+
+		} break;
+		case Image::FORMAT_LA8: {
+
+		} break;
+		default: {
+
+		} break;
+	}
+#endif
+
+	int mipmaps = ((texture->flags & VS::TEXTURE_FLAG_MIPMAPS) && img->has_mipmaps()) ? img->get_mipmap_count() + 1 : 1;
+
+	int w = img->get_width();
+	int h = img->get_height();
+
+	int tsize = 0;
+
+	for (int i = 0; i < mipmaps; i++) {
+
+		int size, ofs;
+		img->get_mipmap_offset_and_size(i, ofs, size);
+
+		//print_line("mipmap: "+itos(i)+" size: "+itos(size)+" w: "+itos(mm_w)+", h: "+itos(mm_h));
+
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		if (texture->flags & VS::TEXTURE_FLAG_USED_FOR_STREAMING) {
+			glTexSubImage2D(blit_target, i, 0, 0, w, h, format, type, &read[ofs]);
+		} else {
+			glTexImage2D(blit_target, i, internal_format, w, h, 0, format, type, &read[ofs]);
+		}
+
+		tsize += size;
+
+		w = MAX(1, w >> 1);
+		h = MAX(1, h >> 1);
+	}
+
+	info.texture_mem -= texture->total_data_size;
+	texture->total_data_size = tsize;
+	info.texture_mem += texture->total_data_size;
+
+	printf("texture: %i x %i - size: %i - total: %i\n", texture->width, texture->height, tsize, info.texture_mem);
+
+	texture->stored_cube_sides |= (1 << p_cube_side);
+
+	if ((texture->flags & VS::TEXTURE_FLAG_MIPMAPS) && mipmaps == 1 && !texture->ignore_mipmaps && (!(texture->flags & VS::TEXTURE_FLAG_CUBEMAP) || texture->stored_cube_sides == (1 << 6) - 1)) {
+		//generate mipmaps if they were requested and the image does not contain them
+		glGenerateMipmap(texture->target);
+	} else if (mipmaps > 1) {
+		// glTexParameteri(texture->target, GL_TEXTURE_BASE_LEVEL, 0);
+		// glTexParameteri(texture->target, GL_TEXTURE_MAX_LEVEL, mipmaps - 1);
+	}
+
+	texture->mipmaps = mipmaps;
 }
 
 Ref<Image> RasterizerStorageGLES2::texture_get_data(RID p_texture, VS::CubeMapSide p_cube_side) const {
+
+	Texture *texture = texture_owner.get(p_texture);
+
+	ERR_FAIL_COND_V(!texture, Ref<Image>());
+	ERR_FAIL_COND_V(!texture->active, Ref<Image>());
+	ERR_FAIL_COND_V(texture->data_size == 0 /*&& !texture->render_target, Ref<Image>()*/, Ref<Image>());
+
+	if (!texture->images[p_cube_side].is_null()) {
+		return texture->images[p_cube_side];
+	}
 
 	return Ref<Image>();
 }
 
 void RasterizerStorageGLES2::texture_set_flags(RID p_texture, uint32_t p_flags) {
+
+	Texture *texture = texture_owner.get(p_texture);
+	ERR_FAIL_COND(!texture);
+
+	bool had_mipmaps = texture->flags & VS::TEXTURE_FLAG_MIPMAPS;
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(texture->target, texture->tex_id);
+	uint32_t cube = texture->flags & VS::TEXTURE_FLAG_CUBEMAP;
+	texture->flags = p_flags | cube; // can't remove a cube from being a cube
+
+	if (((texture->flags & VS::TEXTURE_FLAG_REPEAT) || (texture->flags & VS::TEXTURE_FLAG_MIRRORED_REPEAT)) && texture->target != GL_TEXTURE_CUBE_MAP) {
+
+		if (texture->flags & VS::TEXTURE_FLAG_MIRRORED_REPEAT) {
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+		} else {
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+			glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		}
+	} else {
+		//glTexParameterf( texture->target, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE );
+		glTexParameterf(texture->target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameterf(texture->target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	}
+
+	if ((texture->flags & VS::TEXTURE_FLAG_MIPMAPS) && !texture->ignore_mipmaps) {
+		if (!had_mipmaps && texture->mipmaps == 1) {
+			glGenerateMipmap(texture->target);
+		}
+		glTexParameteri(texture->target, GL_TEXTURE_MIN_FILTER, config.use_fast_texture_filter ? GL_LINEAR_MIPMAP_NEAREST : GL_LINEAR_MIPMAP_LINEAR);
+
+	} else {
+		if (texture->flags & VS::TEXTURE_FLAG_FILTER) {
+			glTexParameteri(texture->target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		} else {
+			glTexParameteri(texture->target, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		}
+	}
+
+	if (texture->flags & VS::TEXTURE_FLAG_FILTER) {
+
+		glTexParameteri(texture->target, GL_TEXTURE_MAG_FILTER, GL_LINEAR); // Linear Filtering
+
+	} else {
+
+		glTexParameteri(texture->target, GL_TEXTURE_MAG_FILTER, GL_NEAREST); // raw Filtering
+	}
 }
 
 uint32_t RasterizerStorageGLES2::texture_get_flags(RID p_texture) const {
-	return 0;
+	Texture *texture = texture_owner.get(p_texture);
+
+	ERR_FAIL_COND_V(!texture, 0);
+
+	return texture->flags;
 }
 
 Image::Format RasterizerStorageGLES2::texture_get_format(RID p_texture) const {
-	return Image::FORMAT_RGBA8;
+	Texture *texture = texture_owner.get(p_texture);
+
+	ERR_FAIL_COND_V(!texture, Image::FORMAT_L8);
+
+	return texture->format;
 }
 
 uint32_t RasterizerStorageGLES2::texture_get_texid(RID p_texture) const {
-	return 0;
+	Texture *texture = texture_owner.get(p_texture);
+
+	ERR_FAIL_COND_V(!texture, 0);
+
+	return texture->tex_id;
 }
 
 uint32_t RasterizerStorageGLES2::texture_get_width(RID p_texture) const {
-	return 0;
+	Texture *texture = texture_owner.get(p_texture);
+
+	ERR_FAIL_COND_V(!texture, 0);
+
+	return texture->width;
 }
 
 uint32_t RasterizerStorageGLES2::texture_get_height(RID p_texture) const {
-	return 0;
+	Texture *texture = texture_owner.get(p_texture);
+
+	ERR_FAIL_COND_V(!texture, 0);
+
+	return texture->height;
 }
 
 void RasterizerStorageGLES2::texture_set_size_override(RID p_texture, int p_width, int p_height) {
+	Texture *texture = texture_owner.get(p_texture);
+
+	ERR_FAIL_COND(!texture);
+	// ERR_FAIL_COND(texture->render_target);
+
+	ERR_FAIL_COND(p_width <= 0 || p_width > 16384);
+	ERR_FAIL_COND(p_height <= 0 || p_height > 16384);
+	//real texture size is in alloc width and height
+	texture->width = p_width;
+	texture->height = p_height;
 }
 
 void RasterizerStorageGLES2::texture_set_path(RID p_texture, const String &p_path) {
+	Texture *texture = texture_owner.get(p_texture);
+	ERR_FAIL_COND(!texture);
+
+	texture->path = p_path;
 }
 
 String RasterizerStorageGLES2::texture_get_path(RID p_texture) const {
-	return "";
+	Texture *texture = texture_owner.get(p_texture);
+	ERR_FAIL_COND_V(!texture, "");
+
+	return texture->path;
 }
 
 void RasterizerStorageGLES2::texture_debug_usage(List<VS::TextureInfo> *r_info) {
+	List<RID> textures;
+	texture_owner.get_owned_list(&textures);
+
+	for (List<RID>::Element *E = textures.front(); E; E = E->next()) {
+
+		Texture *t = texture_owner.get(E->get());
+		if (!t)
+			continue;
+		VS::TextureInfo tinfo;
+		tinfo.path = t->path;
+		tinfo.format = t->format;
+		tinfo.size.x = t->alloc_width;
+		tinfo.size.y = t->alloc_height;
+		tinfo.bytes = t->total_data_size;
+		r_info->push_back(tinfo);
+	}
 }
 
 void RasterizerStorageGLES2::texture_set_shrink_all_x2_on_set_data(bool p_enable) {
@@ -826,4 +1349,5 @@ void RasterizerStorageGLES2::update_dirty_resources() {
 }
 
 RasterizerStorageGLES2::RasterizerStorageGLES2() {
+	RasterizerStorageGLES2::system_fbo = 0;
 }

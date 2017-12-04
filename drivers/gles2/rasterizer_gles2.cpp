@@ -64,6 +64,25 @@ void RasterizerGLES2::clear_render_target(const Color &p_color) {
 }
 
 void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_color, bool p_scale) {
+
+	if (p_image.is_null() || p_image->empty())
+		return;
+
+	int window_w = OS::get_singleton()->get_video_mode(0).width;
+	int window_h = OS::get_singleton()->get_video_mode(0).height;
+
+	glBindFramebuffer(GL_FRAMEBUFFER, RasterizerStorageGLES2::system_fbo);
+	glViewport(0, 0, window_w, window_h);
+	glDisable(GL_BLEND);
+	glDepthMask(GL_FALSE);
+	glClearColor(p_color.r, p_color.g, p_color.b, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	canvas->canvas_begin();
+
+	RID texture = storage->texture_create();
+	storage->texture_allocate(texture, p_image->get_width(), p_image->get_height(), p_image->get_format(), VS::TEXTURE_FLAG_FILTER);
+	storage->texture_set_data(texture, p_image);
 }
 
 void RasterizerGLES2::blit_render_target_to_screen(RID p_render_target, const Rect2 &p_screen_rect, int p_screen) {
