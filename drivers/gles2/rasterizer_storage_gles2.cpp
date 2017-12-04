@@ -615,6 +615,9 @@ void RasterizerStorageGLES2::texture_set_shrink_all_x2_on_set_data(bool p_enable
 void RasterizerStorageGLES2::textures_keep_original(bool p_enable) {
 }
 
+void RasterizerStorageGLES2::texture_set_proxy(RID p_proxy, RID p_base) {
+}
+
 void RasterizerStorageGLES2::texture_set_detect_3d_callback(RID p_texture, VisualServer::TextureDetectCallback p_callback, void *p_userdata) {
 }
 
