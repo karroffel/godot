@@ -22,6 +22,7 @@ if env['xaudio2']:
     SConscript("xaudio2/SCsub")
 
 # Graphics drivers
+SConscript('gles2/SCsub')
 SConscript('gles3/SCsub')
 SConscript('gl_context/SCsub')
 
