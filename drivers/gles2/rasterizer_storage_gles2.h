@@ -124,6 +124,10 @@ public:
 	/* TEXTURE API */
 
 	struct Texture : RID_Data {
+
+		Texture *proxy;
+		Set<Texture *> proxy_owners;
+
 		String path;
 		uint32_t flags;
 		int width, height;
@@ -169,11 +173,29 @@ public:
 			tex_id = 0;
 
 			stored_cube_sides = 0;
+
+			proxy = NULL;
+		}
+
+		_ALWAYS_INLINE_ Texture *get_ptr() {
+			if (proxy) {
+				return proxy; //->get_ptr(); only one level of indirection, else not inlining possible.
+			} else {
+				return this;
+			}
 		}
 
 		~Texture() {
 			if (tex_id != 0) {
 				glDeleteTextures(1, &tex_id);
+			}
+
+			for (Set<Texture *>::Element *E = proxy_owners.front(); E; E = E->next()) {
+				E->get()->proxy = NULL;
+			}
+
+			if (proxy) {
+				proxy->proxy_owners.erase(this);
 			}
 		}
 	};
@@ -205,7 +227,7 @@ public:
 
 	virtual void textures_keep_original(bool p_enable);
 
-	virtual void texture_set_proxy(RID p_proxy, RID p_base);
+	virtual void texture_set_proxy(RID p_texture, RID p_proxy);
 
 	virtual void texture_set_detect_3d_callback(RID p_texture, VisualServer::TextureDetectCallback p_callback, void *p_userdata);
 	virtual void texture_set_detect_srgb_callback(RID p_texture, VisualServer::TextureDetectCallback p_callback, void *p_userdata);

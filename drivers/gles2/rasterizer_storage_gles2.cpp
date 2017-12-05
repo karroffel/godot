@@ -449,9 +449,6 @@ void RasterizerStorageGLES2::texture_set_data(RID p_texture, const Ref<Image> &p
 	if ((texture->flags & VS::TEXTURE_FLAG_MIPMAPS) && mipmaps == 1 && !texture->ignore_mipmaps && (!(texture->flags & VS::TEXTURE_FLAG_CUBEMAP) || texture->stored_cube_sides == (1 << 6) - 1)) {
 		//generate mipmaps if they were requested and the image does not contain them
 		glGenerateMipmap(texture->target);
-	} else if (mipmaps > 1) {
-		// glTexParameteri(texture->target, GL_TEXTURE_BASE_LEVEL, 0);
-		// glTexParameteri(texture->target, GL_TEXTURE_MAX_LEVEL, mipmaps - 1);
 	}
 
 	texture->mipmaps = mipmaps;
@@ -468,8 +465,47 @@ Ref<Image> RasterizerStorageGLES2::texture_get_data(RID p_texture, VS::CubeMapSi
 	if (!texture->images[p_cube_side].is_null()) {
 		return texture->images[p_cube_side];
 	}
+#ifdef GLES_OVER_GL
 
+	PoolVector<uint8_t> data;
+
+	int data_size = Image::get_image_data_size(texture->alloc_width, texture->alloc_height, texture->format, texture->mipmaps > 1 ? -1 : 0);
+
+	data.resize(data_size * 2); //add some memory at the end, just in case for buggy drivers
+	PoolVector<uint8_t>::Write wb = data.write();
+
+	glActiveTexture(GL_TEXTURE0);
+
+	glBindTexture(texture->target, texture->tex_id);
+
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+
+	//print_line("GET FORMAT: " + Image::get_format_name(texture->format) + " mipmaps: " + itos(texture->mipmaps));
+
+	for (int i = 0; i < texture->mipmaps; i++) {
+
+		int ofs = 0;
+		if (i > 0) {
+			ofs = Image::get_image_data_size(texture->alloc_width, texture->alloc_height, texture->format, i - 1);
+		}
+
+		glPixelStorei(GL_PACK_ALIGNMENT, 1);
+
+		glGetTexImage(texture->target, i, texture->gl_format_cache, texture->gl_type_cache, &wb[ofs]);
+	}
+
+	wb = PoolVector<uint8_t>::Write();
+
+	data.resize(data_size);
+
+	Image *img = memnew(Image(texture->alloc_width, texture->alloc_height, texture->mipmaps > 1 ? true : false, texture->format, data));
+
+	return Ref<Image>(img);
+#else
+
+	ERR_EXPLAIN("Sorry, It's not posible to obtain images back in OpenGL ES");
 	return Ref<Image>();
+#endif
 }
 
 void RasterizerStorageGLES2::texture_set_flags(RID p_texture, uint32_t p_flags) {
@@ -610,24 +646,45 @@ void RasterizerStorageGLES2::texture_debug_usage(List<VS::TextureInfo> *r_info) 
 }
 
 void RasterizerStorageGLES2::texture_set_shrink_all_x2_on_set_data(bool p_enable) {
+	config.shrink_textures_x2 = p_enable;
 }
 
 void RasterizerStorageGLES2::textures_keep_original(bool p_enable) {
+	config.keep_original_textures = p_enable;
 }
 
-void RasterizerStorageGLES2::texture_set_proxy(RID p_proxy, RID p_base) {
+void RasterizerStorageGLES2::texture_set_proxy(RID p_texture, RID p_proxy) {
+	Texture *texture = texture_owner.get(p_texture);
+	ERR_FAIL_COND(!texture);
+
+	if (texture->proxy) {
+		texture->proxy->proxy_owners.erase(texture);
+		texture->proxy = NULL;
+	}
+
+	if (p_proxy.is_valid()) {
+		Texture *proxy = texture_owner.get(p_proxy);
+		ERR_FAIL_COND(!proxy);
+		ERR_FAIL_COND(proxy == texture);
+		proxy->proxy_owners.insert(texture);
+		texture->proxy = proxy;
+	}
 }
 
 void RasterizerStorageGLES2::texture_set_detect_3d_callback(RID p_texture, VisualServer::TextureDetectCallback p_callback, void *p_userdata) {
+	// TODO
 }
 
 void RasterizerStorageGLES2::texture_set_detect_srgb_callback(RID p_texture, VisualServer::TextureDetectCallback p_callback, void *p_userdata) {
+	// TODO
 }
 
 void RasterizerStorageGLES2::texture_set_detect_normal_callback(RID p_texture, VisualServer::TextureDetectCallback p_callback, void *p_userdata) {
+	// TODO
 }
 
 RID RasterizerStorageGLES2::texture_create_radiance_cubemap(RID p_source, int p_resolution) const {
+	// TODO
 	return RID();
 }
 
