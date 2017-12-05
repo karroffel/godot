@@ -123,6 +123,8 @@ public:
 
 	/* TEXTURE API */
 
+	struct RenderTarget;
+
 	struct Texture : RID_Data {
 
 		Texture *proxy;
@@ -150,7 +152,7 @@ public:
 
 		uint16_t stored_cube_sides;
 
-		// RenderTarget *render_target;
+		RenderTarget *render_target;
 
 		Ref<Image> images[6];
 
@@ -175,6 +177,8 @@ public:
 			stored_cube_sides = 0;
 
 			proxy = NULL;
+
+			render_target = NULL;
 		}
 
 		_ALWAYS_INLINE_ Texture *get_ptr() {
@@ -509,6 +513,49 @@ public:
 	virtual void instance_remove_dependency(RID p_base, RasterizerScene::InstanceBase *p_instance);
 
 	/* RENDER TARGET */
+
+	struct RenderTarget : public RID_Data {
+		GLuint fbo;
+
+		GLuint color;
+		GLuint depth;
+
+		// TODO post processing effects?
+
+		// TODO HDR?
+
+		int width, height;
+
+		bool flags[RENDER_TARGET_FLAG_MAX];
+
+		bool used_in_frame;
+		VS::ViewportMSAA msaa;
+
+		RID texture;
+
+		RenderTarget() {
+			fbo = 0;
+
+			color = 0;
+			depth = 0;
+
+			width = 0;
+			height = 0;
+
+			for (int i = 0; i < RENDER_TARGET_FLAG_MAX; i++) {
+				flags[i] = false;
+			}
+
+			used_in_frame = false;
+
+			msaa = VS::ViewportMSAA::VIEWPORT_MSAA_DISABLED;
+		}
+	};
+
+	mutable RID_Owner<RenderTarget> render_target_owner;
+
+	void _render_target_clear(RenderTarget *rt);
+	void _render_target_allocate(RenderTarget *rt);
 
 	virtual RID render_target_create();
 	virtual void render_target_set_size(RID p_render_target, int p_width, int p_height);

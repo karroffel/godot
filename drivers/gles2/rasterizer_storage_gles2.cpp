@@ -32,7 +32,7 @@
 #include "rasterizer_canvas_gles2.h"
 #include "rasterizer_scene_gles2.h"
 
-GLuint RasterizerStorageGLES2::system_fbo;
+GLuint RasterizerStorageGLES2::system_fbo = 0;
 
 /* TEXTURE API */
 
@@ -320,7 +320,7 @@ void RasterizerStorageGLES2::texture_set_data(RID p_texture, const Ref<Image> &p
 
 	ERR_FAIL_COND(!texture);
 	ERR_FAIL_COND(!texture->active);
-	// ERR_FAIL_COND(texture->render_target);
+	ERR_FAIL_COND(texture->render_target);
 	ERR_FAIL_COND(texture->format != p_image->get_format());
 	ERR_FAIL_COND(p_image.is_null());
 
@@ -442,7 +442,7 @@ void RasterizerStorageGLES2::texture_set_data(RID p_texture, const Ref<Image> &p
 	texture->total_data_size = tsize;
 	info.texture_mem += texture->total_data_size;
 
-	printf("texture: %i x %i - size: %i - total: %i\n", texture->width, texture->height, tsize, info.texture_mem);
+	// printf("texture: %i x %i - size: %i - total: %i\n", texture->width, texture->height, tsize, info.texture_mem);
 
 	texture->stored_cube_sides |= (1 << p_cube_side);
 
@@ -460,7 +460,7 @@ Ref<Image> RasterizerStorageGLES2::texture_get_data(RID p_texture, VS::CubeMapSi
 
 	ERR_FAIL_COND_V(!texture, Ref<Image>());
 	ERR_FAIL_COND_V(!texture->active, Ref<Image>());
-	ERR_FAIL_COND_V(texture->data_size == 0 /*&& !texture->render_target, Ref<Image>()*/, Ref<Image>());
+	ERR_FAIL_COND_V(texture->data_size == 0 && !texture->render_target, Ref<Image>());
 
 	if (!texture->images[p_cube_side].is_null()) {
 		return texture->images[p_cube_side];
@@ -603,7 +603,7 @@ void RasterizerStorageGLES2::texture_set_size_override(RID p_texture, int p_widt
 	Texture *texture = texture_owner.get(p_texture);
 
 	ERR_FAIL_COND(!texture);
-	// ERR_FAIL_COND(texture->render_target);
+	ERR_FAIL_COND(texture->render_target);
 
 	ERR_FAIL_COND(p_width <= 0 || p_width > 16384);
 	ERR_FAIL_COND(p_height <= 0 || p_height > 16384);
@@ -1328,15 +1328,138 @@ void RasterizerStorageGLES2::instance_remove_dependency(RID p_base, RasterizerSc
 
 /* RENDER TARGET */
 
+void RasterizerStorageGLES2::_render_target_allocate(RenderTarget *rt) {
+
+	if (rt->width <= 0 || rt->height <= 0)
+		return;
+
+	Texture *texture = texture_owner.getornull(rt->texture);
+	ERR_FAIL_COND(!texture);
+
+	// create fbo
+
+	glGenFramebuffers(1, &rt->fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, rt->fbo);
+
+	// color
+
+	glGenTextures(1, &rt->color);
+	glBindBuffer(GL_TEXTURE_2D, rt->color);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rt->width, rt->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+
+	if (texture->flags & VS::TEXTURE_FLAG_FILTER) {
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	} else {
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	}
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rt->color, 0);
+
+	// depth
+
+	glGenRenderbuffers(1, &rt->depth);
+	glBindRenderbuffer(GL_RENDERBUFFER, rt->depth);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, rt->width, rt->height);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rt->depth);
+
+	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+
+	if (status != GL_FRAMEBUFFER_COMPLETE) {
+
+		glDeleteRenderbuffers(1, &rt->fbo);
+		glDeleteTextures(1, &rt->depth);
+		glDeleteTextures(1, &rt->color);
+		rt->fbo = 0;
+		rt->width = 0;
+		rt->height = 0;
+		rt->color = 0;
+		rt->depth = 0;
+		texture->tex_id = 0;
+		texture->active = false;
+		WARN_PRINT("Could not create framebuffer!!");
+	}
+}
+
+void RasterizerStorageGLES2::_render_target_clear(RenderTarget *rt) {
+
+	if (rt->fbo) {
+		glDeleteFramebuffers(1, &rt->fbo);
+		glDeleteTextures(1, &rt->color);
+		rt->fbo = 0;
+	}
+
+	if (rt->depth) {
+		glDeleteRenderbuffers(1, &rt->depth);
+		rt->depth = 0;
+	}
+
+	Texture *tex = texture_owner.get(rt->texture);
+	tex->alloc_height = 0;
+	tex->alloc_width = 0;
+	tex->width = 0;
+	tex->height = 0;
+	tex->active = false;
+}
+
 RID RasterizerStorageGLES2::render_target_create() {
-	return RID();
+
+	RenderTarget *rt = memnew(RenderTarget);
+
+	Texture *t = memnew(Texture);
+
+	t->flags = 0;
+	t->width = 0;
+	t->height = 0;
+	t->alloc_height = 0;
+	t->alloc_width = 0;
+	t->format = Image::FORMAT_R8;
+	t->target = GL_TEXTURE_2D;
+	t->gl_format_cache = 0;
+	t->gl_internal_format_cache = 0;
+	t->gl_type_cache = 0;
+	t->data_size = 0;
+	t->total_data_size = 0;
+	t->ignore_mipmaps = false;
+	t->mipmaps = 1;
+	t->active = true;
+	t->tex_id = 0;
+	t->render_target = rt;
+
+	rt->texture = texture_owner.make_rid(t);
+
+	return render_target_owner.make_rid(rt);
 }
 
 void RasterizerStorageGLES2::render_target_set_size(RID p_render_target, int p_width, int p_height) {
+
+	print_line("set_render_target_size");
+
+	RenderTarget *rt = render_target_owner.getornull(p_render_target);
+	ERR_FAIL_COND(!rt);
+
+	if (p_width == rt->width && p_height == rt->height)
+		return;
+
+	_render_target_clear(rt);
+
+	rt->width = p_width;
+	rt->height = p_height;
+
+	_render_target_allocate(rt);
 }
 
 RID RasterizerStorageGLES2::render_target_get_texture(RID p_render_target) const {
-	return RID();
+
+	RenderTarget *rt = render_target_owner.getornull(p_render_target);
+	ERR_FAIL_COND_V(!rt, RID());
+
+	return rt->texture;
 }
 
 void RasterizerStorageGLES2::render_target_set_flag(RID p_render_target, RenderTargetFlags p_flag, bool p_value) {

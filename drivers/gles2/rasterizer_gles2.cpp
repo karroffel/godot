@@ -33,6 +33,7 @@
 #include "os/os.h"
 #include "project_settings.h"
 #include <string.h>
+
 RasterizerStorage *RasterizerGLES2::get_storage() {
 
 	return storage;
@@ -49,6 +50,59 @@ RasterizerScene *RasterizerGLES2::get_scene() {
 }
 
 void RasterizerGLES2::initialize() {
+
+	if (OS::get_singleton()->is_stdout_verbose()) {
+		print_line("Using GLES3 video driver");
+	}
+
+#ifdef GLAD_ENABLED
+	if (!gladLoadGL()) {
+		ERR_PRINT("Error initializing GLAD");
+	}
+
+// GLVersion seems to be used for both GL and GL ES, so we need different version checks for them
+#ifdef OPENGL_ENABLED // OpenGL 3.3 Core Profile required
+	if (GLVersion.major < 3) {
+#else // OpenGL ES 3.0
+	if (GLVersion.major < 2) {
+#endif
+		ERR_PRINT("Your system's graphic drivers seem not to support OpenGL 3.0 / OpenGL ES 2.0, sorry :(\n"
+				  "Try a drivers update, buy a new GPU or try software rendering on Linux; Godot will now crash with a segmentation fault.");
+		OS::get_singleton()->alert("Your system's graphic drivers seem not to support OpenGL 3.0 / OpenGL ES 2.0, sorry :(\n"
+								   "Godot Engine will self-destruct as soon as you acknowledge this error message.",
+				"Fatal error: Insufficient OpenGL / GLES driver support");
+	}
+
+#ifdef __APPLE__
+// FIXME glDebugMessageCallbackARB does not seem to work on Mac OS X and opengl 3, this may be an issue with our opengl canvas..
+#else
+		// if (OS::get_singleton()->is_stdout_verbose()) {
+		// 	glEnable(_EXT_DEBUG_OUTPUT_SYNCHRONOUS_ARB);
+		//	glDebugMessageCallbackARB(_gl_debug_print, NULL);
+		//	glEnable(_EXT_DEBUG_OUTPUT);
+		// }
+#endif
+
+#endif // GLAD_ENABLED
+
+	/* // For debugging
+	glDebugMessageControlARB(GL_DEBUG_SOURCE_API_ARB,GL_DEBUG_TYPE_ERROR_ARB,GL_DEBUG_SEVERITY_HIGH_ARB,0,NULL,GL_TRUE);
+	glDebugMessageControlARB(GL_DEBUG_SOURCE_API_ARB,GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR_ARB,GL_DEBUG_SEVERITY_HIGH_ARB,0,NULL,GL_TRUE);
+	glDebugMessageControlARB(GL_DEBUG_SOURCE_API_ARB,GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR_ARB,GL_DEBUG_SEVERITY_HIGH_ARB,0,NULL,GL_TRUE);
+	glDebugMessageControlARB(GL_DEBUG_SOURCE_API_ARB,GL_DEBUG_TYPE_PORTABILITY_ARB,GL_DEBUG_SEVERITY_HIGH_ARB,0,NULL,GL_TRUE);
+	glDebugMessageControlARB(GL_DEBUG_SOURCE_API_ARB,GL_DEBUG_TYPE_PERFORMANCE_ARB,GL_DEBUG_SEVERITY_HIGH_ARB,0,NULL,GL_TRUE);
+	glDebugMessageControlARB(GL_DEBUG_SOURCE_API_ARB,GL_DEBUG_TYPE_OTHER_ARB,GL_DEBUG_SEVERITY_HIGH_ARB,0,NULL,GL_TRUE);
+	glDebugMessageInsertARB(
+			GL_DEBUG_SOURCE_API_ARB,
+			GL_DEBUG_TYPE_OTHER_ARB, 1,
+			GL_DEBUG_SEVERITY_HIGH_ARB,5, "hello");
+	*/
+
+	const GLubyte *renderer = glGetString(GL_RENDERER);
+	print_line("OpenGL ES 3.0 Renderer: " + String((const char *)renderer));
+	storage->initialize();
+	canvas->initialize();
+	scene->initialize();
 }
 
 void RasterizerGLES2::begin_frame() {
@@ -68,10 +122,12 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	if (p_image.is_null() || p_image->empty())
 		return;
 
+	return; // TODO
+
 	int window_w = OS::get_singleton()->get_video_mode(0).width;
 	int window_h = OS::get_singleton()->get_video_mode(0).height;
 
-	glBindFramebuffer(GL_FRAMEBUFFER, RasterizerStorageGLES2::system_fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glViewport(0, 0, window_w, window_h);
 	glDisable(GL_BLEND);
 	glDepthMask(GL_FALSE);
