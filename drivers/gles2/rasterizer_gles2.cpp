@@ -52,7 +52,7 @@ RasterizerScene *RasterizerGLES2::get_scene() {
 void RasterizerGLES2::initialize() {
 
 	if (OS::get_singleton()->is_stdout_verbose()) {
-		print_line("Using GLES3 video driver");
+		print_line("Using GLES2 video driver");
 	}
 
 #ifdef GLAD_ENABLED
@@ -99,7 +99,7 @@ void RasterizerGLES2::initialize() {
 	*/
 
 	const GLubyte *renderer = glGetString(GL_RENDERER);
-	print_line("OpenGL ES 3.0 Renderer: " + String((const char *)renderer));
+	print_line("OpenGL ES 2.0 Renderer: " + String((const char *)renderer));
 	storage->initialize();
 	canvas->initialize();
 	scene->initialize();
@@ -121,8 +121,6 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 
 	if (p_image.is_null() || p_image->empty())
 		return;
-
-	return; // TODO
 
 	int window_w = OS::get_singleton()->get_video_mode(0).width;
 	int window_h = OS::get_singleton()->get_video_mode(0).height;
