@@ -33,6 +33,8 @@
 
 //#define DEBUG_OPENGL
 
+#include "shaders/copy.glsl.gen.h"
+
 #ifdef DEBUG_OPENGL
 
 #define DEBUG_TEST_ERROR(m_section)                                         \
@@ -63,17 +65,80 @@ ShaderGLES2 *ShaderGLES2::active = NULL;
 #endif
 
 void ShaderGLES2::bind_uniforms() {
+	if (!uniforms_dirty)
+		return;
+
+	// regular uniforms
+
+	const Map<uint32_t, Variant>::Element *E = uniform_defaults.front();
+
+	while (E) {
+		int idx = E->key();
+		int location = version->uniform_location[idx];
+
+		if (location < 0) {
+			E = E->next();
+			continue;
+		}
+
+		const Variant &v = E->value();
+		_set_uniform_variant(location, v);
+		E = E->next();
+	}
+
+	// camera uniforms
+
+	const Map<uint32_t, CameraMatrix>::Element *C = uniform_cameras.front();
+
+	while (C) {
+		int idx = E->key();
+		int location = version->uniform_location[idx];
+
+		if (location < 0) {
+			C = C->next();
+			continue;
+		}
+
+		glUniformMatrix4fv(location, 1, GL_FALSE, &(C->get().matrix[0][0]));
+		C = C->next();
+	}
+
+	uniforms_dirty = false;
 }
 
 GLint ShaderGLES2::get_uniform_location(int p_index) const {
-	return -1;
+
+	ERR_FAIL_COND_V(!version, -1);
+
+	return version->uniform_location[p_index];
 }
 
 bool ShaderGLES2::bind() {
-	return false;
+
+	if (active != this || !version || new_conditional_version.key != conditional_version.key) {
+		conditional_version = new_conditional_version;
+		version = get_current_version();
+	} else {
+		return false;
+	}
+
+	ERR_FAIL_COND_V(!version, false);
+
+	glUseProgram(version->id);
+
+	DEBUG_TEST_ERROR("use program");
+
+	active = this;
+	uniforms_dirty = true;
+
+	return true;
 }
 
 void ShaderGLES2::unbind() {
+	version = NULL;
+	glUseProgram(0);
+	uniforms_dirty = true;
+	active = NULL;
 }
 
 ShaderGLES2::Version *ShaderGLES2::get_current_version() {
@@ -83,10 +148,11 @@ ShaderGLES2::Version *ShaderGLES2::get_current_version() {
 
 GLint ShaderGLES2::get_uniform_location(const String &p_name) const {
 
-	return -1;
+	ERR_FAIL_COND_V(!version, -1);
+	return glGetUniformLocation(version->id, p_name.ascii().get_data());
 }
 
-void ShaderGLES2::setup(const char **p_conditional_defines, int p_conditional_count, const char **p_uniform_names, int p_uniform_count, const AttributePair *p_attribute_pairs, int p_attribute_count, const TexUnitPair *p_texunit_pairs, int p_texunit_pair_count, const UBOPair *p_ubo_pairs, int p_ubo_pair_count, const Feedback *p_feedback, int p_feedback_count, const char *p_vertex_code, const char *p_fragment_code, int p_vertex_code_start, int p_fragment_code_start) {
+void ShaderGLES2::setup(const char **p_conditional_defines, int p_conditional_count, const char **p_uniform_names, int p_uniform_count, const AttributePair *p_attribute_pairs, int p_attribute_count, const TexUnitPair *p_texunit_pairs, int p_texunit_pair_count, const char *p_vertex_code, const char *p_fragment_code, int p_vertex_code_start, int p_fragment_code_start) {
 }
 
 void ShaderGLES2::finish() {
