@@ -107,6 +107,7 @@ private:
 		GLuint frag_id;
 		GLint *uniform_location;
 		Vector<GLint> texture_uniform_locations;
+		Vector<GLint> custom_uniform_locations;
 		uint32_t code_version;
 		bool ok;
 		Version() {
@@ -155,12 +156,10 @@ private:
 	CharString fragment_code1;
 	CharString fragment_code2;
 	CharString fragment_code3;
-	CharString fragment_code4;
 
 	CharString vertex_code0;
 	CharString vertex_code1;
 	CharString vertex_code2;
-	CharString vertex_code3;
 
 	Vector<CharString> custom_defines;
 

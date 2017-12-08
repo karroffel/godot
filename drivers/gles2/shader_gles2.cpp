@@ -29,7 +29,9 @@
 /*************************************************************************/
 #include "shader_gles2.h"
 
+#include "memory.h"
 #include "print_string.h"
+#include "string_builder.h"
 
 //#define DEBUG_OPENGL
 
@@ -141,9 +143,368 @@ void ShaderGLES2::unbind() {
 	active = NULL;
 }
 
+static String _fix_error_code_line(const String &p_error, int p_code_start, int p_offset) {
+
+	int last_find_pos = -1;
+	// NVIDIA
+	String error = p_error;
+	while ((last_find_pos = p_error.find("(", last_find_pos + 1)) != -1) {
+
+		int end_pos = last_find_pos + 1;
+
+		while (true) {
+
+			if (p_error[end_pos] >= '0' && p_error[end_pos] <= '9') {
+
+				end_pos++;
+				continue;
+			} else if (p_error[end_pos] == ')') {
+				break;
+			} else {
+
+				end_pos = -1;
+				break;
+			}
+		}
+
+		if (end_pos == -1)
+			continue;
+
+		String numstr = error.substr(last_find_pos + 1, (end_pos - last_find_pos) - 1);
+		String begin = error.substr(0, last_find_pos + 1);
+		String end = error.substr(end_pos, error.length());
+		int num = numstr.to_int() + p_code_start - p_offset;
+		error = begin + itos(num) + end;
+	}
+
+	// ATI
+	last_find_pos = -1;
+	while ((last_find_pos = p_error.find("ERROR: ", last_find_pos + 1)) != -1) {
+
+		last_find_pos += 6;
+		int end_pos = last_find_pos + 1;
+
+		while (true) {
+
+			if (p_error[end_pos] >= '0' && p_error[end_pos] <= '9') {
+
+				end_pos++;
+				continue;
+			} else if (p_error[end_pos] == ':') {
+				break;
+			} else {
+
+				end_pos = -1;
+				break;
+			}
+		}
+		continue;
+		if (end_pos == -1)
+			continue;
+
+		String numstr = error.substr(last_find_pos + 1, (end_pos - last_find_pos) - 1);
+		print_line("numstr: " + numstr);
+		String begin = error.substr(0, last_find_pos + 1);
+		String end = error.substr(end_pos, error.length());
+		int num = numstr.to_int() + p_code_start - p_offset;
+		error = begin + itos(num) + end;
+	}
+	return error;
+}
+
 ShaderGLES2::Version *ShaderGLES2::get_current_version() {
 
-	return NULL;
+	Version *_v = version_map.getptr(conditional_version);
+
+	if (_v) {
+		if (conditional_version.code_version != 0) {
+			CustomCode *cc = custom_code_map.getptr(conditional_version.code_version);
+			ERR_FAIL_COND_V(!cc, _v);
+			if (cc->version == _v->code_version)
+				return _v;
+		} else {
+			return _v;
+		}
+	}
+
+	if (!_v)
+		version_map[conditional_version];
+
+	Version &v = version_map[conditional_version];
+
+	if (!_v) {
+		v.uniform_location = memnew_arr(GLint, uniform_count);
+	} else {
+		if (v.ok) {
+			glDeleteShader(v.vert_id);
+			glDeleteShader(v.frag_id);
+			glDeleteProgram(v.id);
+			v.id = 0;
+		}
+	}
+
+	v.ok = false;
+
+	Vector<const char *> strings;
+
+	strings.push_back("#version 120\n");
+
+	int define_line_ofs = 1;
+
+	for (int j = 0; j < conditional_count; j++) {
+		bool enable = (conditional_version.version & (1 << j)) > 0;
+
+		if (enable) {
+			strings.push_back(conditional_defines[j]);
+			define_line_ofs++;
+			DEBUG_PRINT(conditional_defines[j]);
+		}
+	}
+
+	// keep them around during the functino
+	CharString code_string;
+	CharString code_string2;
+	CharString code_globals;
+
+	CustomCode *cc = NULL;
+
+	if (conditional_version.code_version > 0) {
+		cc = custom_code_map.getptr(conditional_version.code_version);
+
+		ERR_FAIL_COND_V(!cc, NULL);
+		v.code_version = cc->version;
+		define_line_ofs += 2;
+	}
+
+	// program
+
+	v.id = glCreateProgram();
+	ERR_FAIL_COND_V(v.id == 0, NULL);
+
+	// vertex shader
+
+	if (cc) {
+		for (int i = 0; i < cc->custom_defines.size(); i++) {
+			strings.push_back(cc->custom_defines[i]);
+			DEBUG_PRINT("CD #" + itos(i) + ": " + String(cc->custom_defines[i]));
+		}
+	}
+
+	int string_base_size = strings.size();
+
+	strings.push_back(vertex_code0.get_data());
+
+	if (cc) {
+		code_globals = cc->vertex_globals.ascii();
+		strings.push_back(code_globals.get_data());
+	}
+
+	strings.push_back(vertex_code1.get_data());
+
+	if (cc) {
+		code_string = cc->vertex.ascii();
+		strings.push_back(code_string.get_data());
+	}
+
+	strings.push_back(vertex_code2.get_data());
+
+#ifdef DEBUG_SHADER
+
+	DEBUG_PRINT("\nVertex Code:\n\n" + String(code_string.get_data()));
+
+#endif
+
+	v.vert_id = glCreateShader(GL_VERTEX_SHADER);
+	glShaderSource(v.vert_id, strings.size(), &strings[0], NULL);
+	glCompileShader(v.vert_id);
+
+	GLint status;
+
+	glGetShaderiv(v.vert_id, GL_COMPILE_STATUS, &status);
+	if (status == GL_FALSE) {
+		GLsizei iloglen;
+		glGetShaderiv(v.vert_id, GL_INFO_LOG_LENGTH, &iloglen);
+
+		if (iloglen < 0) {
+			glDeleteShader(v.vert_id);
+			glDeleteProgram(v.id);
+			v.id = 0;
+
+			ERR_PRINT("No OpenGL vertex shader compiler log. What the frick?");
+		} else {
+			if (iloglen == 0) {
+				iloglen = 4096; // buggy driver (Adreno 220+)
+			}
+
+			char *ilogmem = (char *)Memory::alloc_static(iloglen + 1);
+			ilogmem[iloglen] = '\0';
+			glGetShaderInfoLog(v.vert_id, iloglen, &iloglen, ilogmem);
+
+			String err_string = get_shader_name() + ": Vertex shader compilation failed:\n";
+
+			err_string += ilogmem;
+			err_string = _fix_error_code_line(err_string, vertex_code_start, define_line_ofs);
+
+			ERR_PRINTS(err_string);
+
+			Memory::free_static(ilogmem);
+			glDeleteShader(v.vert_id);
+			glDeleteProgram(v.id);
+			v.id = 0;
+		}
+
+		ERR_FAIL_V(NULL);
+	}
+
+	strings.resize(string_base_size);
+
+	// fragment shader
+
+	strings.push_back(fragment_code0.get_data());
+
+	if (cc) {
+		code_globals = cc->fragment_globals.ascii();
+		strings.push_back(code_globals.get_data());
+	}
+
+	strings.push_back(fragment_code1.get_data());
+
+	if (cc) {
+		code_string = cc->fragment.ascii();
+		strings.push_back(code_string.get_data());
+	}
+
+	strings.push_back(fragment_code2.get_data());
+
+	if (cc) {
+		code_string2 = cc->light.ascii();
+		strings.push_back(code_string2.get_data());
+	}
+
+	strings.push_back(fragment_code3.get_data());
+
+#ifdef DEBUG_SHADER
+	DEBUG_PRINT("\nFragment Code:\n\n" + String(code_string.get_data()));
+#endif
+
+	v.frag_id = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(v.frag_id, strings.size(), &strings[0], NULL);
+	glCompileShader(v.frag_id);
+
+	glGetShaderiv(v.frag_id, GL_COMPILE_STATUS, &status);
+	if (status == GL_FALSE) {
+		GLsizei iloglen;
+		glGetShaderiv(v.frag_id, GL_INFO_LOG_LENGTH, &iloglen);
+
+		if (iloglen < 0) {
+			glDeleteShader(v.frag_id);
+			glDeleteShader(v.vert_id);
+			glDeleteProgram(v.id);
+			v.id = 0;
+
+			ERR_PRINT("No OpenGL fragment shader compiler log. What the frick?");
+		} else {
+			if (iloglen == 0) {
+				iloglen = 4096; // buggy driver (Adreno 220+)
+			}
+
+			char *ilogmem = (char *)Memory::alloc_static(iloglen + 1);
+			ilogmem[iloglen] = '\0';
+			glGetShaderInfoLog(v.frag_id, iloglen, &iloglen, ilogmem);
+
+			String err_string = get_shader_name() + ": Fragment shader compilation failed:\n";
+
+			err_string += ilogmem;
+			err_string = _fix_error_code_line(err_string, fragment_code_start, define_line_ofs);
+
+			ERR_PRINTS(err_string);
+
+			Memory::free_static(ilogmem);
+			glDeleteShader(v.frag_id);
+			glDeleteShader(v.vert_id);
+			glDeleteProgram(v.id);
+			v.id = 0;
+		}
+
+		ERR_FAIL_V(NULL);
+	}
+
+	glAttachShader(v.id, v.frag_id);
+	glAttachShader(v.id, v.vert_id);
+
+	// bind the attribute locations. This has to be done before linking so that the
+	// linker doesn't assign some random indices
+
+	for (int i = 0; i < attribute_pair_count; i++) {
+		glBindAttribLocation(v.id, attribute_pairs[i].index, attribute_pairs[i].name);
+	}
+
+	glLinkProgram(v.id);
+
+	glGetProgramiv(v.id, GL_LINK_STATUS, &status);
+	if (status == GL_FALSE) {
+		GLsizei iloglen;
+		glGetProgramiv(v.id, GL_INFO_LOG_LENGTH, &iloglen);
+
+		if (iloglen < 0) {
+			glDeleteShader(v.frag_id);
+			glDeleteShader(v.vert_id);
+			glDeleteProgram(v.id);
+			v.id = 0;
+
+			ERR_PRINT("No OpenGL program link log. What the frick?");
+			ERR_FAIL_V(NULL);
+		}
+
+		if (iloglen == 0) {
+			iloglen = 4096; // buggy driver (Adreno 220+)
+		}
+
+		char *ilogmem = (char *)Memory::alloc_static(iloglen + 1);
+		ilogmem[iloglen] = '\0';
+		glGetProgramInfoLog(v.id, iloglen, &iloglen, ilogmem);
+
+		String err_string = get_shader_name() + ": Program linking failed:\n";
+
+		err_string += ilogmem;
+		err_string = _fix_error_code_line(err_string, fragment_code_start, define_line_ofs);
+
+		ERR_PRINTS(err_string);
+
+		Memory::free_static(ilogmem);
+		glDeleteShader(v.frag_id);
+		glDeleteShader(v.vert_id);
+		glDeleteProgram(v.id);
+		v.id = 0;
+
+		ERR_FAIL_V(NULL);
+	}
+
+	// get uniform locations
+
+	glUseProgram(v.id);
+
+	for (int i = 0; i < uniform_count; i++) {
+		v.uniform_location[i] = glGetUniformLocation(v.id, uniform_names[i]);
+	}
+
+	for (int i = 0; i < texunit_pair_count; i++) {
+		GLint loc = glGetUniformLocation(v.id, texunit_pairs[i].name);
+		if (loc >= 0)
+			glUniform1i(loc, texunit_pairs[i].index);
+	}
+
+	if (cc) {
+		v.custom_uniform_locations.resize(cc->custom_uniforms.size());
+		for (int i = 0; i < cc->custom_uniforms.size(); i++) {
+			v.custom_uniform_locations[i] = glGetUniformLocation(v.id, String(cc->custom_uniforms[i]).ascii().get_data());
+		}
+	}
+
+	glUseProgram(0);
+	v.ok = true;
+
+	return &v;
 }
 
 GLint ShaderGLES2::get_uniform_location(const String &p_name) const {
