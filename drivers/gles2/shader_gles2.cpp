@@ -513,35 +513,172 @@ GLint ShaderGLES2::get_uniform_location(const String &p_name) const {
 	return glGetUniformLocation(version->id, p_name.ascii().get_data());
 }
 
-void ShaderGLES2::setup(const char **p_conditional_defines, int p_conditional_count, const char **p_uniform_names, int p_uniform_count, const AttributePair *p_attribute_pairs, int p_attribute_count, const TexUnitPair *p_texunit_pairs, int p_texunit_pair_count, const char *p_vertex_code, const char *p_fragment_code, int p_vertex_code_start, int p_fragment_code_start) {
+void ShaderGLES2::setup(
+		const char **p_conditional_defines,
+		int p_conditional_count,
+		const char **p_uniform_names,
+		int p_uniform_count,
+		const AttributePair *p_attribute_pairs,
+		int p_attribute_count,
+		const TexUnitPair *p_texunit_pairs,
+		int p_texunit_pair_count,
+		const char *p_vertex_code,
+		const char *p_fragment_code,
+		int p_vertex_code_start,
+		int p_fragment_code_start) {
+
+	ERR_FAIL_COND(version);
+
+	conditional_version.key = 0;
+	new_conditional_version.key = 0;
+	uniform_count = p_uniform_count;
+	conditional_count = p_conditional_count;
+	conditional_defines = p_conditional_defines;
+	uniform_names = p_uniform_names;
+	vertex_code = p_vertex_code;
+	fragment_code = p_fragment_code;
+	texunit_pairs = p_texunit_pairs;
+	texunit_pair_count = p_texunit_pair_count;
+	vertex_code_start = p_vertex_code_start;
+	fragment_code_start = p_fragment_code_start;
+	attribute_pairs = p_attribute_pairs;
+	attribute_pair_count = p_attribute_count;
+
+	{
+		String globals_tag = "\nVERTEX_SHADER_GLOBALS";
+		String code_tag = "\nVERTEX_SHADER_CODE";
+		String code = vertex_code;
+		int cpos = code.find(globals_tag);
+		if (cpos == -1) {
+			vertex_code0 = code.ascii();
+		} else {
+			vertex_code0 = code.substr(0, cpos).ascii();
+			code = code.substr(cpos + globals_tag.length(), code.length());
+
+			cpos = code.find(code_tag);
+
+			if (cpos == -1) {
+				vertex_code1 = code.ascii();
+			} else {
+				vertex_code1 = code.substr(0, cpos).ascii();
+				vertex_code2 = code.substr(cpos + code_tag.length(), code.length()).ascii();
+			}
+		}
+	}
+
+	{
+		String globals_tag = "\nFRAGMENT_SHADER_GLOBALS";
+		String code_tag = "\nFRAGMENT_SHADER_CODE";
+		String light_code_tag = "\nLIGHT_SHADER_CODE";
+		String code = fragment_code;
+		int cpos = code.find(globals_tag);
+		if (cpos == -1) {
+			fragment_code0 = code.ascii();
+		} else {
+			fragment_code0 = code.substr(0, cpos).ascii();
+			code = code.substr(cpos + globals_tag.length(), code.length());
+
+			cpos = code.find(code_tag);
+
+			if (cpos == -1) {
+				fragment_code1 = code.ascii();
+			} else {
+
+				fragment_code1 = code.substr(0, cpos).ascii();
+				String code2 = code.substr(cpos + code_tag.length(), code.length());
+
+				cpos = code2.find(light_code_tag);
+				if (cpos == -1) {
+					fragment_code2 = code2.ascii();
+				} else {
+					fragment_code2 = code2.substr(0, cpos).ascii();
+					fragment_code3 = code2.substr(cpos + light_code_tag.length(), code2.length()).ascii();
+				}
+			}
+		}
+	}
 }
 
 void ShaderGLES2::finish() {
+	const VersionKey *V = NULL;
+
+	while ((V = version_map.next(V))) {
+		Version &v = version_map[*V];
+		glDeleteShader(v.vert_id);
+		glDeleteShader(v.frag_id);
+		glDeleteProgram(v.id);
+		memdelete_arr(v.uniform_location);
+	}
 }
 
 void ShaderGLES2::clear_caches() {
+	const VersionKey *V = NULL;
+
+	while ((V = version_map.next(V))) {
+		Version &v = version_map[*V];
+		glDeleteShader(v.vert_id);
+		glDeleteShader(v.frag_id);
+		glDeleteProgram(v.id);
+		memdelete_arr(v.uniform_location);
+	}
+
+	version_map.clear();
+
+	custom_code_map.clear();
+	version = NULL;
+	last_custom_code = 1;
+	uniforms_dirty = true;
 }
 
 uint32_t ShaderGLES2::create_custom_shader() {
-	return 0;
+	custom_code_map[last_custom_code] = CustomCode();
+	custom_code_map[last_custom_code].version = 1;
+	return last_custom_code++;
 }
 
-void ShaderGLES2::set_custom_shader_code(uint32_t p_code_id, const String &p_vertex, const String &p_vertex_globals, const String &p_fragment, const String &p_light, const String &p_fragment_globals, const String &p_uniforms, const Vector<StringName> &p_texture_uniforms, const Vector<CharString> &p_custom_defines) {
+void ShaderGLES2::set_custom_shader_code(uint32_t p_code_id,
+		const String &p_vertex,
+		const String &p_vertex_globals,
+		const String &p_fragment,
+		const String &p_light,
+		const String &p_fragment_globals,
+		const Vector<StringName> &p_uniforms,
+		const Vector<StringName> &p_texture_uniforms,
+		const Vector<CharString> &p_custom_defines) {
+	CustomCode *cc = custom_code_map.getptr(p_code_id);
+	ERR_FAIL_COND(!cc);
+
+	cc->vertex = p_vertex;
+	cc->vertex_globals = p_vertex_globals;
+	cc->fragment = p_fragment;
+	cc->fragment_globals = p_fragment_globals;
+	cc->light = p_light;
+	cc->custom_uniforms = p_uniforms;
+	cc->custom_defines = p_custom_defines;
+	cc->version++;
 }
 
 void ShaderGLES2::set_custom_shader(uint32_t p_code_id) {
+	new_conditional_version.code_version = p_code_id;
 }
 
 void ShaderGLES2::free_custom_shader(uint32_t p_code_id) {
+	ERR_FAIL_COND(!custom_code_map.has(p_code_id));
+	if (conditional_version.code_version == p_code_id)
+		conditional_version.code_version = 0;
+
+	custom_code_map.erase(p_code_id);
 }
 
 void ShaderGLES2::set_base_material_tex_index(int p_idx) {
 }
 
 ShaderGLES2::ShaderGLES2() {
+	version = NULL;
+	last_custom_code = 1;
+	uniforms_dirty = true;
 }
 
 ShaderGLES2::~ShaderGLES2() {
-
 	finish();
 }

@@ -132,7 +132,7 @@ private:
 
 	struct VersionKeyHash {
 
-		static _FORCE_INLINE_ uint32_t hash(const VersionKey &p_key) { return HashMapHasherDefault::hash(p_key.key); };
+		static _FORCE_INLINE_ uint32_t hash(const VersionKey &p_key) { return HashMapHasherDefault::hash(p_key.key); }
 	};
 
 	//this should use a way more cachefriendly version..
@@ -162,8 +162,6 @@ private:
 	CharString vertex_code2;
 
 	Vector<CharString> custom_defines;
-
-	int base_ma3terial_tex_index;
 
 	Version *get_current_version();
 
@@ -275,7 +273,18 @@ protected:
 	_FORCE_INLINE_ int _get_uniform(int p_which) const;
 	_FORCE_INLINE_ void _set_conditional(int p_which, bool p_value);
 
-	void setup(const char **p_conditional_defines, int p_conditional_count, const char **p_uniform_names, int p_uniform_count, const AttributePair *p_attribute_pairs, int p_attribute_count, const TexUnitPair *p_texunit_pairs, int p_texunit_pair_count, const char *p_vertex_code, const char *p_fragment_code, int p_vertex_code_start, int p_fragment_code_start);
+	void setup(const char **p_conditional_defines,
+			int p_conditional_count,
+			const char **p_uniform_names,
+			int p_uniform_count,
+			const AttributePair *p_attribute_pairs,
+			int p_attribute_count,
+			const TexUnitPair *p_texunit_pairs,
+			int p_texunit_pair_count,
+			const char *p_vertex_code,
+			const char *p_fragment_code,
+			int p_vertex_code_start,
+			int p_fragment_code_start);
 
 	ShaderGLES2();
 
@@ -287,7 +296,7 @@ public:
 	GLint get_uniform_location(const String &p_name) const;
 	GLint get_uniform_location(int p_index) const;
 
-	static _FORCE_INLINE_ ShaderGLES2 *get_active() { return active; };
+	static _FORCE_INLINE_ ShaderGLES2 *get_active() { return active; }
 	bool bind();
 	void unbind();
 	void bind_uniforms();
@@ -297,7 +306,16 @@ public:
 	void clear_caches();
 
 	uint32_t create_custom_shader();
-	void set_custom_shader_code(uint32_t p_code_id, const String &p_vertex, const String &p_vertex_globals, const String &p_fragment, const String &p_light, const String &p_fragment_globals, const String &p_uniforms, const Vector<StringName> &p_texture_uniforms, const Vector<CharString> &p_custom_defines);
+	void set_custom_shader_code(uint32_t p_code_id,
+			const String &p_vertex,
+			const String &p_vertex_globals,
+			const String &p_fragment,
+			const String &p_light,
+			const String &p_fragment_globals,
+			const Vector<StringName> &p_uniforms,
+			const Vector<StringName> &p_texture_uniforms,
+			const Vector<CharString> &p_custom_defines);
+
 	void set_custom_shader(uint32_t p_code_id);
 	void free_custom_shader(uint32_t p_code_id);
 
@@ -319,7 +337,7 @@ public:
 
 		uniform_cameras[p_idx] = p_mat;
 		uniforms_dirty = true;
-	};
+	}
 
 	_FORCE_INLINE_ void set_texture_uniform(int p_idx, const Variant &p_value) {
 
