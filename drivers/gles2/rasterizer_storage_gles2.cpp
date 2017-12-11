@@ -1556,6 +1556,15 @@ int RasterizerStorageGLES2::get_render_info(VS::RenderInfo p_info) {
 }
 
 void RasterizerStorageGLES2::initialize() {
+	RasterizerStorageGLES2::system_fbo = 0;
+
+	frame.count = 0;
+	frame.prev_tick = 0;
+	frame.delta = 0;
+	frame.current_rt = NULL;
+	frame.clear_request = true;
+	frame.clear_request_color = Color(0.0, 0.0, 1.0, 1.0);
+	// config.keep_original_textures = false;
 }
 
 void RasterizerStorageGLES2::finalize() {

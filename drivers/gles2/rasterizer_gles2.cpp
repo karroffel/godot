@@ -109,12 +109,44 @@ void RasterizerGLES2::begin_frame() {
 }
 
 void RasterizerGLES2::set_current_render_target(RID p_render_target) {
+
+	if (!p_render_target.is_valid() && storage->frame.current_rt && storage->frame.clear_request) {
+		// pending clear request. Do that first.
+		glBindFramebuffer(GL_FRAMEBUFFER, storage->frame.current_rt->fbo);
+		glClearColor(storage->frame.clear_request_color.r,
+				storage->frame.clear_request_color.g,
+				storage->frame.clear_request_color.b,
+				storage->frame.clear_request_color.a);
+		glClear(GL_COLOR_BUFFER_BIT);
+	}
+
+	if (p_render_target.is_valid()) {
+		RasterizerStorageGLES2::RenderTarget *rt = storage->render_target_owner.getornull(p_render_target);
+		storage->frame.current_rt = rt;
+		ERR_FAIL_COND(!rt);
+		storage->frame.clear_request = false;
+
+		glViewport(0, 0, rt->width, rt->height);
+	} else {
+		storage->frame.current_rt = NULL;
+		storage->frame.clear_request = false;
+		glViewport(0, 0, OS::get_singleton()->get_window_size().width, OS::get_singleton()->get_window_size().height);
+		glBindFramebuffer(GL_FRAMEBUFFER, RasterizerStorageGLES2::system_fbo);
+	}
 }
 
 void RasterizerGLES2::restore_render_target() {
+	ERR_FAIL_COND(storage->frame.current_rt == NULL);
+	RasterizerStorageGLES2::RenderTarget *rt = storage->frame.current_rt;
+	glBindFramebuffer(GL_FRAMEBUFFER, rt->fbo);
+	glViewport(0, 0, rt->width, rt->height);
 }
 
 void RasterizerGLES2::clear_render_target(const Color &p_color) {
+	ERR_FAIL_COND(!storage->frame.current_rt);
+
+	storage->frame.clear_request = true;
+	storage->frame.clear_request_color = p_color;
 }
 
 void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_color, bool p_scale) {
@@ -129,7 +161,7 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	glViewport(0, 0, window_w, window_h);
 	glDisable(GL_BLEND);
 	glDepthMask(GL_FALSE);
-	glClearColor(p_color.r, p_color.g, p_color.b, 1.0);
+	glClearColor(0.0, 0.0, 1.0, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	canvas->canvas_begin();
@@ -137,6 +169,23 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	RID texture = storage->texture_create();
 	storage->texture_allocate(texture, p_image->get_width(), p_image->get_height(), p_image->get_format(), VS::TEXTURE_FLAG_FILTER);
 	storage->texture_set_data(texture, p_image);
+
+	Rect2 imgrect(0, 0, p_image->get_width(), p_image->get_height());
+	Rect2 screenrect;
+
+	screenrect = imgrect;
+	screenrect.position += ((Size2(window_w, window_h) - screenrect.size) / 2.0).floor();
+
+	RasterizerStorageGLES2::Texture *t = storage->texture_owner.get(texture);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, t->tex_id);
+	canvas->draw_generic_textured_rect(screenrect, Rect2(0, 0, 1, 1));
+	glBindTexture(GL_TEXTURE0, 0);
+	canvas->canvas_end();
+
+	storage->free(texture);
+
+	OS::get_singleton()->swap_buffers();
 }
 
 void RasterizerGLES2::blit_render_target_to_screen(RID p_render_target, const Rect2 &p_screen_rect, int p_screen) {

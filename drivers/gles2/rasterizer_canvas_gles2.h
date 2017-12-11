@@ -33,12 +33,40 @@
 #include "rasterizer_storage_gles2.h"
 #include "servers/visual/rasterizer.h"
 
+#include "shaders/canvas.glsl.gen.h"
+
 // #include "shaders/canvas_shadow.glsl.gen.h"
 
 class RasterizerSceneGLES2;
 
 class RasterizerCanvasGLES2 : public RasterizerCanvas {
 public:
+	struct Data {
+
+		GLuint canvas_quad_vertices;
+
+	} data;
+
+	struct State {
+		bool canvas_texscreen_used;
+		CanvasShaderGLES2 canvas_shader;
+		// CanvasShadowShaderGLES3 canvas_shadow_shader;
+
+		bool using_texture_rect;
+		bool using_ninepatch;
+
+		RID current_tex;
+		RID current_normal;
+		RasterizerStorageGLES2::Texture *current_tex_ptr;
+
+		Transform vp;
+
+		Color canvas_item_modulate;
+		Transform2D extra_matrix;
+		Transform2D final_transform;
+
+	} state;
+
 	typedef void Texture;
 
 	RasterizerSceneGLES2 *scene_render;

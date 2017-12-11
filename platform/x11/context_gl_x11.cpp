@@ -151,6 +151,19 @@ Error ContextGL_X11::initialize() {
 			p->glx_context = glXCreateContext(x11_display, vi, 0, GL_TRUE);
 		} break;
 		case ContextType::GLES_2_0_COMPATIBLE: {
+
+			static int context_attribs[] = {
+				GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
+				GLX_CONTEXT_MINOR_VERSION_ARB, 0,
+				None
+			};
+
+			p->glx_context = glXCreateContextAttribsARB(x11_display, fbc[0], NULL, true, context_attribs);
+			ERR_EXPLAIN("Could not obtain an OpenGL 3.0 context!");
+			ERR_FAIL_COND_V(!p->glx_context, ERR_UNCONFIGURED);
+		} break;
+		case ContextType::GLES_3_0_COMPATIBLE: {
+
 			static int context_attribs[] = {
 				GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
 				GLX_CONTEXT_MINOR_VERSION_ARB, 3,
@@ -161,17 +174,6 @@ Error ContextGL_X11::initialize() {
 			p->glx_context = glXCreateContextAttribsARB(x11_display, fbc[0], NULL, true, context_attribs);
 			ERR_EXPLAIN("Could not obtain an OpenGL 3.3 context!");
 			ERR_FAIL_COND_V(ctxErrorOccurred || !p->glx_context, ERR_UNCONFIGURED);
-		} break;
-		case ContextType::GLES_3_0_COMPATIBLE: {
-			static int context_attribs[] = {
-				GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
-				GLX_CONTEXT_MINOR_VERSION_ARB, 0,
-				None
-			};
-
-			p->glx_context = glXCreateContextAttribsARB(x11_display, fbc[0], NULL, true, context_attribs);
-			ERR_EXPLAIN("Could not obtain an OpenGL 3.0 context!");
-			ERR_FAIL_COND_V(!p->glx_context, ERR_UNCONFIGURED);
 		} break;
 	}
 

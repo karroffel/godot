@@ -579,6 +579,20 @@ public:
 
 	virtual bool free(RID p_rid);
 
+	struct Frame {
+
+		RenderTarget *current_rt;
+
+		bool clear_request;
+		Color clear_request_color;
+		int canvas_draw_commands;
+		float time[4];
+		float delta;
+		uint64_t prev_tick;
+		uint64_t count;
+
+	} frame;
+
 	void initialize();
 	void finalize();
 
