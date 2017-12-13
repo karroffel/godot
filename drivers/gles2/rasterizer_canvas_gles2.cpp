@@ -36,6 +36,45 @@
 #define glClearDepth glClearDepthf
 #endif
 
+static _FORCE_INLINE_ void store_transform2d(const Transform2D &p_mtx, float *p_array) {
+
+	p_array[0] = p_mtx.elements[0][0];
+	p_array[1] = p_mtx.elements[0][1];
+	p_array[2] = 0;
+	p_array[3] = 0;
+	p_array[4] = p_mtx.elements[1][0];
+	p_array[5] = p_mtx.elements[1][1];
+	p_array[6] = 0;
+	p_array[7] = 0;
+	p_array[8] = 0;
+	p_array[9] = 0;
+	p_array[10] = 1;
+	p_array[11] = 0;
+	p_array[12] = p_mtx.elements[2][0];
+	p_array[13] = p_mtx.elements[2][1];
+	p_array[14] = 0;
+	p_array[15] = 1;
+}
+
+static _FORCE_INLINE_ void store_transform(const Transform &p_mtx, float *p_array) {
+	p_array[0] = p_mtx.basis.elements[0][0];
+	p_array[1] = p_mtx.basis.elements[1][0];
+	p_array[2] = p_mtx.basis.elements[2][0];
+	p_array[3] = 0;
+	p_array[4] = p_mtx.basis.elements[0][1];
+	p_array[5] = p_mtx.basis.elements[1][1];
+	p_array[6] = p_mtx.basis.elements[2][1];
+	p_array[7] = 0;
+	p_array[8] = p_mtx.basis.elements[0][2];
+	p_array[9] = p_mtx.basis.elements[1][2];
+	p_array[10] = p_mtx.basis.elements[2][2];
+	p_array[11] = 0;
+	p_array[12] = p_mtx.origin.x;
+	p_array[13] = p_mtx.origin.y;
+	p_array[14] = p_mtx.origin.z;
+	p_array[15] = 1;
+}
+
 RID RasterizerCanvasGLES2::light_internal_create() {
 
 	return RID();
@@ -66,6 +105,7 @@ void RasterizerCanvasGLES2::canvas_begin() {
 	state.canvas_shader.bind();
 	state.canvas_shader.set_uniform(CanvasShaderGLES2::MODELVIEW_MATRIX, Transform2D());
 	state.canvas_shader.set_uniform(CanvasShaderGLES2::EXTRA_MATRIX, Transform2D());
+	state.canvas_shader.set_uniform(CanvasShaderGLES2::PROJECTION_MATRIX, state.uniforms.projection_matrix);
 }
 
 void RasterizerCanvasGLES2::canvas_end() {
@@ -105,11 +145,41 @@ void RasterizerCanvasGLES2::canvas_light_shadow_buffer_update(RID p_buffer, cons
 }
 
 void RasterizerCanvasGLES2::reset_canvas() {
+
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_SCISSOR_TEST);
+	glDisable(GL_DITHER);
+	glEnable(GL_BLEND);
+	glBlendEquation(GL_FUNC_ADD);
+	if (storage->frame.current_rt && storage->frame.current_rt->flags[RasterizerStorage::RENDER_TARGET_TRANSPARENT]) {
+		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+	} else {
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	}
+
+	Transform canvas_transform;
+
+	if (storage->frame.current_rt) {
+
+		float csy = 1.0;
+		if (storage->frame.current_rt && storage->frame.current_rt->flags[RasterizerStorage::RENDER_TARGET_VFLIP]) {
+			csy = -1.0;
+		}
+		canvas_transform.translate(-(storage->frame.current_rt->width / 2.0f), -(storage->frame.current_rt->height / 2.0f), 0.0f);
+		canvas_transform.scale(Vector3(2.0f / storage->frame.current_rt->width, csy * -2.0f / storage->frame.current_rt->height, 1.0f));
+	} else {
+		Vector2 ssize = OS::get_singleton()->get_window_size();
+		canvas_transform.translate(-(ssize.width / 2.0f), -(ssize.height / 2.0f), 0.0f);
+		canvas_transform.scale(Vector3(2.0f / ssize.width, -2.0f / ssize.height, 1.0f));
+	}
+
+	state.uniforms.projection_matrix = canvas_transform;
 }
 
 void RasterizerCanvasGLES2::draw_generic_textured_rect(const Rect2 &p_rect, const Rect2 &p_src) {
-	// state.canvas_shader.set_uniform(CanvasShaderGLES2::DST_RECT, Color(p_rect.position.x, p_rect.position.y, p_rect.size.x, p_rect.size.y));
-	// state.canvas_shader.set_uniform(CanvasShaderGLES2::SRC_RECT, Color(p_src.position.x, p_src.position.y, p_src.size.x, p_src.size.y));
+	state.canvas_shader.set_uniform(CanvasShaderGLES2::DST_RECT, Color(p_rect.position.x, p_rect.position.y, p_rect.size.x, p_rect.size.y));
+	state.canvas_shader.set_uniform(CanvasShaderGLES2::SRC_RECT, Color(p_src.position.x, p_src.position.y, p_src.size.x, p_src.size.y));
 	// state.canvas_shader.set_uniform(CanvasShaderGLES3::CLIP_RECT_UV, false);
 
 	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);

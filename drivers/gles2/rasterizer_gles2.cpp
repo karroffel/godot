@@ -161,7 +161,7 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 	glViewport(0, 0, window_w, window_h);
 	glDisable(GL_BLEND);
 	glDepthMask(GL_FALSE);
-	glClearColor(0.0, 0.0, 1.0, 1.0);
+	glClearColor(p_color.r, p_color.g, p_color.b, p_color.a);
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	canvas->canvas_begin();

@@ -41,6 +41,11 @@ class RasterizerSceneGLES2;
 
 class RasterizerCanvasGLES2 : public RasterizerCanvas {
 public:
+	struct Uniforms {
+		Transform projection_matrix;
+		float time;
+	};
+
 	struct Data {
 
 		GLuint canvas_quad_vertices;
@@ -48,6 +53,7 @@ public:
 	} data;
 
 	struct State {
+		Uniforms uniforms;
 		bool canvas_texscreen_used;
 		CanvasShaderGLES2 canvas_shader;
 		// CanvasShadowShaderGLES3 canvas_shadow_shader;
