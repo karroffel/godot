@@ -74,6 +74,9 @@ varying vec2 uv_interp;
 // varying vec4 color_interp;
 
 
+uniform vec4 final_modulate;
+
+
 FRAGMENT_SHADER_GLOBALS
 
 
@@ -89,6 +92,7 @@ FRAGMENT_SHADER_CODE
 
 
 }
+	color = color * final_modulate;
 	gl_FragColor = color;
 
 }

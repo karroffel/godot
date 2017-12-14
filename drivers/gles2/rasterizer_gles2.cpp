@@ -106,6 +106,39 @@ void RasterizerGLES2::initialize() {
 }
 
 void RasterizerGLES2::begin_frame() {
+	uint64_t tick = OS::get_singleton()->get_ticks_usec();
+
+	double delta = double(tick - prev_ticks) / 1000000.0;
+	delta *= Engine::get_singleton()->get_time_scale();
+
+	time_total += delta;
+
+	if (delta == 0) {
+		//to avoid hiccups
+		delta = 0.001;
+	}
+
+	prev_ticks = tick;
+
+	double time_roll_over = GLOBAL_GET("rendering/limits/time/time_rollover_secs");
+	if (time_total > time_roll_over)
+		time_total = 0; //roll over every day (should be customz
+
+	storage->frame.time[0] = time_total;
+	storage->frame.time[1] = Math::fmod(time_total, 3600);
+	storage->frame.time[2] = Math::fmod(time_total, 900);
+	storage->frame.time[3] = Math::fmod(time_total, 60);
+	storage->frame.count++;
+	storage->frame.delta = delta;
+
+	storage->frame.prev_tick = tick;
+
+	storage->update_dirty_resources();
+
+	storage->info.render_final = storage->info.render;
+	storage->info.render.reset();
+
+	scene->iteration();
 }
 
 void RasterizerGLES2::set_current_render_target(RID p_render_target) {
@@ -189,9 +222,30 @@ void RasterizerGLES2::set_boot_image(const Ref<Image> &p_image, const Color &p_c
 }
 
 void RasterizerGLES2::blit_render_target_to_screen(RID p_render_target, const Rect2 &p_screen_rect, int p_screen) {
+
+	ERR_FAIL_COND(storage->frame.current_rt);
+
+	RasterizerStorageGLES2::RenderTarget *rt = storage->render_target_owner.getornull(p_render_target);
+	ERR_FAIL_COND(!rt);
+
+	canvas->canvas_begin();
+	glDisable(GL_BLEND);
+	glBindFramebuffer(GL_FRAMEBUFFER, RasterizerStorageGLES2::system_fbo);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, rt->color);
+
+	// TODO normals
+
+	canvas->draw_generic_textured_rect(p_screen_rect, Rect2(0, 0, 1, -1));
+	glBindTexture(GL_TEXTURE_2D, 0);
+	canvas->canvas_end();
 }
 
 void RasterizerGLES2::end_frame(bool p_swap_buffers) {
+	if (p_swap_buffers)
+		OS::get_singleton()->swap_buffers();
+	else
+		glFinish();
 }
 
 void RasterizerGLES2::finalize() {

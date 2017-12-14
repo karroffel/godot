@@ -103,6 +103,7 @@ void RasterizerCanvasGLES2::canvas_begin() {
 	state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_GLES_OVER_GL, true);
 	state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_TEXTURE_RECT, true);
 	state.canvas_shader.bind();
+	state.canvas_shader.set_uniform(CanvasShaderGLES2::FINAL_MODULATE, Color(1, 1, 1, 1));
 	state.canvas_shader.set_uniform(CanvasShaderGLES2::MODELVIEW_MATRIX, Transform2D());
 	state.canvas_shader.set_uniform(CanvasShaderGLES2::EXTRA_MATRIX, Transform2D());
 	state.canvas_shader.set_uniform(CanvasShaderGLES2::PROJECTION_MATRIX, state.uniforms.projection_matrix);
@@ -118,6 +119,35 @@ void RasterizerCanvasGLES2::canvas_end() {
 }
 
 void RasterizerCanvasGLES2::_set_texture_rect_mode(bool p_enable, bool p_ninepatch) {
+
+	if (state.using_texture_rect == p_enable && state.using_ninepatch == p_ninepatch)
+		return;
+
+	if (p_enable) {
+		glBindBuffer(GL_ARRAY_BUFFER, data.canvas_quad_vertices);
+		glVertexAttribPointer(VS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+		glEnableVertexAttribArray(VS::ARRAY_VERTEX);
+	} else {
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glDisableVertexAttribArray(VS::ARRAY_VERTEX);
+	}
+
+	// state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_NINEPATCH, p_ninepatch && p_enable);
+	state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_TEXTURE_RECT, p_enable);
+	state.canvas_shader.bind();
+
+	state.canvas_shader.set_uniform(CanvasShaderGLES2::FINAL_MODULATE, state.canvas_item_modulate);
+	state.canvas_shader.set_uniform(CanvasShaderGLES2::MODELVIEW_MATRIX, state.final_transform);
+	state.canvas_shader.set_uniform(CanvasShaderGLES2::EXTRA_MATRIX, state.extra_matrix);
+
+	if (storage->frame.current_rt) {
+		// state.canvas_shader.set_uniform(CanvasShaderGLES2::SCREEN_PIXEL_SIZE, Vector2(1.0 / storage->frame.current_rt->width, 1.0 / storage->frame.current_rt->height));
+	} else {
+		// state.canvas_shader.set_uniform(CanvasShaderGLES2::SCREEN_PIXEL_SIZE, Vector2(1.0, 1.0));
+	}
+
+	state.using_texture_rect = p_enable;
+	state.using_ninepatch = p_ninepatch;
 }
 
 void RasterizerCanvasGLES2::_draw_polygon(const int *p_indices, int p_index_count, int p_vertex_count, const Vector2 *p_vertices, const Vector2 *p_uvs, const Color *p_colors, bool p_singlecolor) {
@@ -136,6 +166,7 @@ void RasterizerCanvasGLES2::_copy_texscreen(const Rect2 &p_rect) {
 }
 
 void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, const Color &p_modulate, Light *p_light) {
+	print_line("canvas_render_item");
 }
 
 void RasterizerCanvasGLES2::canvas_debug_viewport_shadows(Light *p_lights_with_shadow) {
@@ -182,6 +213,10 @@ void RasterizerCanvasGLES2::draw_generic_textured_rect(const Rect2 &p_rect, cons
 	state.canvas_shader.set_uniform(CanvasShaderGLES2::SRC_RECT, Color(p_src.position.x, p_src.position.y, p_src.size.x, p_src.size.y));
 	// state.canvas_shader.set_uniform(CanvasShaderGLES3::CLIP_RECT_UV, false);
 
+	glBindBuffer(GL_ARRAY_BUFFER, data.canvas_quad_vertices);
+
+	glEnableVertexAttribArray(VS::ARRAY_VERTEX);
+	glVertexAttribPointer(VS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 0, NULL);
 	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 }
 
@@ -202,10 +237,6 @@ void RasterizerCanvasGLES2::initialize() {
 		};
 
 		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 8, qv, GL_STATIC_DRAW);
-
-		glEnableVertexAttribArray(VS::ARRAY_VERTEX);
-
-		glVertexAttribPointer(VS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 0, NULL);
 
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
