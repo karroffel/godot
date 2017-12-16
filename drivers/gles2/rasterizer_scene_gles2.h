@@ -33,6 +33,7 @@
 /* Must come before shaders or the Windows build fails... */
 #include "rasterizer_storage_gles2.h"
 
+#include "shaders/scene.glsl.gen.h"
 /*
 
 #include "drivers/gles3/shaders/cube_to_dp.glsl.gen.h"
@@ -52,6 +53,119 @@
 class RasterizerSceneGLES2 : public RasterizerScene {
 public:
 	RasterizerStorageGLES2 *storage;
+	struct State {
+
+		bool texscreen_copied;
+		int current_blend_mode;
+		float current_line_width;
+		int current_depth_draw;
+		bool current_depth_test;
+		GLuint current_main_tex;
+
+		SceneShaderGLES2 scene_shader;
+		// CubeToDpShaderGLES3 cube_to_dp_shader;
+		// ResolveShaderGLES3 resolve_shader;
+		// ScreenSpaceReflectionShaderGLES3 ssr_shader;
+		// EffectBlurShaderGLES3 effect_blur_shader;
+		// SubsurfScatteringShaderGLES3 sss_shader;
+		// SsaoMinifyShaderGLES3 ssao_minify_shader;
+		// SsaoShaderGLES3 ssao_shader;
+		// SsaoBlurShaderGLES3 ssao_blur_shader;
+		// ExposureShaderGLES3 exposure_shader;
+		// TonemapShaderGLES3 tonemap_shader;
+
+		/*
+		struct SceneDataUBO {
+			//this is a std140 compatible struct. Please read the OpenGL 3.3 Specificaiton spec before doing any changes
+			float projection_matrix[16];
+			float inv_projection_matrix[16];
+			float camera_inverse_matrix[16];
+			float camera_matrix[16];
+			float ambient_light_color[4];
+			float bg_color[4];
+			float fog_color_enabled[4];
+			float fog_sun_color_amount[4];
+
+			float ambient_energy;
+			float bg_energy;
+			float z_offset;
+			float z_slope_scale;
+			float shadow_dual_paraboloid_render_zfar;
+			float shadow_dual_paraboloid_render_side;
+			float viewport_size[2];
+			float screen_pixel_size[2];
+			float shadow_atlas_pixel_size[2];
+			float shadow_directional_pixel_size[2];
+
+			float time;
+			float z_far;
+			float reflection_multiplier;
+			float subsurface_scatter_width;
+			float ambient_occlusion_affect_light;
+
+			uint32_t fog_depth_enabled;
+			float fog_depth_begin;
+			float fog_depth_curve;
+			uint32_t fog_transmit_enabled;
+			float fog_transmit_curve;
+			uint32_t fog_height_enabled;
+			float fog_height_min;
+			float fog_height_max;
+			float fog_height_curve;
+			// make sure this struct is padded to be a multiple of 16 bytes for webgl
+
+		} ubo_data;
+
+		GLuint scene_ubo;
+
+		struct EnvironmentRadianceUBO {
+
+			float transform[16];
+			float ambient_contribution;
+			uint8_t padding[12];
+
+		} env_radiance_data;
+
+		GLuint env_radiance_ubo;
+
+		GLuint sky_verts;
+		GLuint sky_array;
+
+		GLuint directional_ubo;
+
+		GLuint spot_array_ubo;
+		GLuint omni_array_ubo;
+		GLuint reflection_array_ubo;
+
+		GLuint immediate_buffer;
+		GLuint immediate_array;
+
+		uint32_t ubo_light_size;
+		uint8_t *spot_array_tmp;
+		uint8_t *omni_array_tmp;
+		uint8_t *reflection_array_tmp;
+
+		int max_ubo_lights;
+		int max_forward_lights_per_object;
+		int max_ubo_reflections;
+		int max_skeleton_bones;
+
+		bool used_contact_shadows;
+
+		int spot_light_count;
+		int omni_light_count;
+		int directional_light_count;
+		int reflection_probe_count;
+
+		bool cull_front;
+		bool cull_disabled;
+		bool used_sss;
+		bool used_screen_texture;
+		bool using_contact_shadows;
+
+		VS::ViewportDebugDraw debug_draw;
+		*/
+	} state;
 
 	/* SHADOW ATLAS API */
 

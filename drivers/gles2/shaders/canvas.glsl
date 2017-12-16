@@ -12,11 +12,11 @@ uniform highp mat4 projection_matrix;
 uniform highp mat4 modelview_matrix;
 uniform highp mat4 extra_matrix;
 attribute highp vec2 vertex; // attrib:0
-// attribute vec4 color_attrib; // attrib:3
+attribute vec4 color_attrib; // attrib:3
 // attribute highp vec2 uv_attrib; // attrib:4
 
 varying vec2 uv_interp;
-// varying vec4 color_interp;
+varying vec4 color_interp;
 
 #ifdef USE_TEXTURE_RECT
 
@@ -29,8 +29,8 @@ VERTEX_SHADER_GLOBALS
 
 void main() {
 
-        // color_interp = color_attrib;
-        // uv_interp = uv_attrib;
+	color_interp = color_attrib;
+	uv_interp = uv_attrib;
 
 #ifdef USE_TEXTURE_RECT
 	highp vec4 outvec = vec4(
@@ -71,7 +71,7 @@ precision mediump int;
 uniform sampler2D texture;
 
 varying vec2 uv_interp;
-// varying vec4 color_interp;
+varying vec4 color_interp;
 
 
 uniform vec4 final_modulate;
@@ -82,9 +82,9 @@ FRAGMENT_SHADER_GLOBALS
 
 void main() {
 
-	// vec4 color = color_interp;
+	vec4 color = color_interp;
 	vec2 uv = uv_interp;
-	vec4 color = texture2D(texture, uv);
+	// vec4 color = texture2D(texture, uv);
 
 {
 

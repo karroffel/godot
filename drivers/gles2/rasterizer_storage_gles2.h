@@ -80,6 +80,18 @@ public:
 		bool force_vertex_shading;
 	} config;
 
+	struct Resources {
+
+		GLuint white_tex;
+		GLuint black_tex;
+		GLuint normal_tex;
+		GLuint aniso_tex;
+
+		GLuint quadie;
+		GLuint quadie_array;
+
+	} resources;
+
 	struct Info {
 
 		uint64_t texture_mem;
@@ -244,6 +256,127 @@ public:
 
 	/* SHADER API */
 
+	struct Material;
+
+	struct Shader : public RID_Data {
+
+		RID self;
+
+		VS::ShaderMode mode;
+		ShaderGLES2 *shader;
+		String code;
+		SelfList<Material>::List materials;
+
+		Map<StringName, ShaderLanguage::ShaderNode::Uniform> uniforms;
+		Vector<uint32_t> ubo_offsets;
+		uint32_t ubo_size;
+
+		uint32_t texture_count;
+
+		uint32_t custom_code_id;
+		uint32_t version;
+
+		SelfList<Shader> dirty_list;
+
+		Map<StringName, RID> default_textures;
+
+		Vector<ShaderLanguage::ShaderNode::Uniform::Hint> texture_hints;
+
+		bool valid;
+
+		String path;
+
+		struct CanvasItem {
+
+			enum BlendMode {
+				BLEND_MODE_MIX,
+				BLEND_MODE_ADD,
+				BLEND_MODE_SUB,
+				BLEND_MODE_MUL,
+				BLEND_MODE_PMALPHA,
+			};
+
+			int blend_mode;
+
+			enum LightMode {
+				LIGHT_MODE_NORMAL,
+				LIGHT_MODE_UNSHADED,
+				LIGHT_MODE_LIGHT_ONLY
+			};
+
+			int light_mode;
+			bool uses_screen_texture;
+			bool uses_screen_uv;
+			bool uses_time;
+
+		} canvas_item;
+
+		struct Spatial {
+
+			enum BlendMode {
+				BLEND_MODE_MIX,
+				BLEND_MODE_ADD,
+				BLEND_MODE_SUB,
+				BLEND_MODE_MUL,
+			};
+
+			int blend_mode;
+
+			enum DepthDrawMode {
+				DEPTH_DRAW_OPAQUE,
+				DEPTH_DRAW_ALWAYS,
+				DEPTH_DRAW_NEVER,
+				DEPTH_DRAW_ALPHA_PREPASS,
+			};
+
+			int depth_draw_mode;
+
+			enum CullMode {
+				CULL_MODE_FRONT,
+				CULL_MODE_BACK,
+				CULL_MODE_DISABLED,
+			};
+
+			int cull_mode;
+
+			bool uses_alpha;
+			bool uses_alpha_scissor;
+			bool unshaded;
+			bool no_depth_test;
+			bool uses_vertex;
+			bool uses_discard;
+			bool uses_sss;
+			bool uses_screen_texture;
+			bool uses_time;
+			bool writes_modelview_or_projection;
+			bool uses_vertex_lighting;
+			bool uses_world_coordinates;
+
+		} spatial;
+
+		struct Particles {
+
+		} particles;
+
+		bool uses_vertex_time;
+		bool uses_fragment_time;
+
+		Shader()
+			: dirty_list(this) {
+
+			shader = NULL;
+			ubo_size = 0;
+			valid = false;
+			custom_code_id = 0;
+			version = 1;
+		}
+	};
+
+	mutable RID_Owner<Shader> shader_owner;
+	mutable SelfList<Shader>::List _shader_dirty_list;
+
+	void _shader_make_dirty(Shader *p_shader);
+
 	virtual RID shader_create();
 
 	virtual void shader_set_code(RID p_shader, const String &p_code);
@@ -256,6 +389,48 @@ public:
 	void update_dirty_shaders();
 
 	/* COMMON MATERIAL API */
+
+	struct Material : public RID_Data {
+
+		Shader *shader;
+		GLuint ubo_id;
+		uint32_t ubo_size;
+		Map<StringName, Variant> params;
+		SelfList<Material> list;
+		SelfList<Material> dirty_list;
+		Vector<RID> textures;
+		float line_width;
+		int render_priority;
+
+		RID next_pass;
+
+		uint32_t index;
+		uint64_t last_pass;
+
+		Map<Geometry *, int> geometry_owners;
+		Map<RasterizerScene::InstanceBase *, int> instance_owners;
+
+		bool can_cast_shadow_cache;
+		bool is_animated_cache;
+
+		Material()
+			: list(this), dirty_list(this) {
+			can_cast_shadow_cache = false;
+			is_animated_cache = false;
+			shader = NULL;
+			line_width = 1.0;
+			ubo_id = 0;
+			ubo_size = 0;
+			last_pass = 0;
+			render_priority = 0;
+		}
+	};
+
+	mutable SelfList<Material>::List _material_dirty_list;
+	void _material_make_dirty(Material *p_material) const;
+
+	mutable RID_Owner<Material> material_owner;
+
 	virtual RID material_create();
 
 	virtual void material_set_shader(RID p_material, RID p_shader);

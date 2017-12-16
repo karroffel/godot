@@ -698,7 +698,24 @@ void RasterizerStorageGLES2::sky_set_texture(RID p_sky, RID p_panorama, int p_ra
 /* SHADER API */
 
 RID RasterizerStorageGLES2::shader_create() {
-	return RID();
+
+	Shader *shader = memnew(Shader);
+	shader->mode = VS::SHADER_SPATIAL;
+	shader->shader = &scene->state.scene_shader;
+	RID rid = shader_owner.make_rid(shader);
+	_shader_make_dirty(shader);
+	shader->self = rid;
+
+	print_line("shader create");
+
+	return rid;
+}
+
+void RasterizerStorageGLES2::_shader_make_dirty(Shader *p_shader) {
+	if (p_shader->dirty_list.in_list())
+		return;
+
+	_shader_dirty_list.add(&p_shader->dirty_list);
 }
 
 void RasterizerStorageGLES2::shader_set_code(RID p_shader, const String &p_code) {
@@ -723,12 +740,42 @@ RID RasterizerStorageGLES2::shader_get_default_texture_param(RID p_shader, const
 
 /* COMMON MATERIAL API */
 
+void RasterizerStorageGLES2::_material_make_dirty(Material *p_material) const {
+
+	if (p_material->dirty_list.in_list())
+		return;
+
+	_material_dirty_list.add(&p_material->dirty_list);
+}
+
 RID RasterizerStorageGLES2::material_create() {
 
-	return RID();
+	Material *material = memnew(Material);
+
+	print_line("create material");
+
+	return material_owner.make_rid(material);
 }
 
 void RasterizerStorageGLES2::material_set_shader(RID p_material, RID p_shader) {
+
+	Material *material = material_owner.get(p_material);
+	ERR_FAIL_COND(!material);
+
+	Shader *shader = shader_owner.getornull(p_shader);
+
+	if (material->shader) {
+		// if a shader is present, remove the old shader
+		material->shader->materials.remove(&material->list);
+	}
+
+	material->shader = shader;
+
+	if (shader) {
+		shader->materials.add(&material->list);
+	}
+
+	_material_make_dirty(material);
 }
 
 RID RasterizerStorageGLES2::material_get_shader(RID p_material) const {
@@ -1558,6 +1605,18 @@ int RasterizerStorageGLES2::get_render_info(VS::RenderInfo p_info) {
 void RasterizerStorageGLES2::initialize() {
 	RasterizerStorageGLES2::system_fbo = 0;
 
+	{
+
+		int max_extensions = 0;
+		glGetIntegerv(GL_NUM_EXTENSIONS, &max_extensions);
+		for (int i = 0; i < max_extensions; i++) {
+			const GLubyte *s = glGetStringi(GL_EXTENSIONS, i);
+			if (!s)
+				break;
+			config.extensions.insert((const char *)s);
+		}
+	}
+
 	frame.count = 0;
 	frame.prev_tick = 0;
 	frame.delta = 0;
@@ -1565,6 +1624,62 @@ void RasterizerStorageGLES2::initialize() {
 	frame.clear_request = true;
 	frame.clear_request_color = Color(0.0, 0.0, 1.0, 1.0);
 	// config.keep_original_textures = false;
+
+	{
+		//default textures
+
+		glGenTextures(1, &resources.white_tex);
+		unsigned char whitetexdata[8 * 8 * 3];
+		for (int i = 0; i < 8 * 8 * 3; i++) {
+			whitetexdata[i] = 255;
+		}
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, resources.white_tex);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 8, 8, 0, GL_RGB, GL_UNSIGNED_BYTE, whitetexdata);
+		glGenerateMipmap(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, 0);
+
+		glGenTextures(1, &resources.black_tex);
+		unsigned char blacktexdata[8 * 8 * 3];
+		for (int i = 0; i < 8 * 8 * 3; i++) {
+			blacktexdata[i] = 0;
+		}
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, resources.black_tex);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 8, 8, 0, GL_RGB, GL_UNSIGNED_BYTE, blacktexdata);
+		glGenerateMipmap(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, 0);
+
+		glGenTextures(1, &resources.normal_tex);
+		unsigned char normaltexdata[8 * 8 * 3];
+		for (int i = 0; i < 8 * 8 * 3; i += 3) {
+			normaltexdata[i + 0] = 128;
+			normaltexdata[i + 1] = 128;
+			normaltexdata[i + 2] = 255;
+		}
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, resources.normal_tex);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 8, 8, 0, GL_RGB, GL_UNSIGNED_BYTE, normaltexdata);
+		glGenerateMipmap(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, 0);
+
+		glGenTextures(1, &resources.aniso_tex);
+		unsigned char anisotexdata[8 * 8 * 3];
+		for (int i = 0; i < 8 * 8 * 3; i += 3) {
+			anisotexdata[i + 0] = 255;
+			anisotexdata[i + 1] = 128;
+			anisotexdata[i + 2] = 0;
+		}
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, resources.aniso_tex);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 8, 8, 0, GL_RGB, GL_UNSIGNED_BYTE, anisotexdata);
+		glGenerateMipmap(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
 }
 
 void RasterizerStorageGLES2::finalize() {
