@@ -81,6 +81,8 @@ public:
 
 		get_root()->add_child(frame);
 
+		return;
+
 		Label *label = memnew(Label);
 
 		label->set_position(Point2(80, 90));

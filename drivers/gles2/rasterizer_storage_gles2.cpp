@@ -423,8 +423,6 @@ void RasterizerStorageGLES2::texture_set_data(RID p_texture, const Ref<Image> &p
 		int size, ofs;
 		img->get_mipmap_offset_and_size(i, ofs, size);
 
-		//print_line("mipmap: "+itos(i)+" size: "+itos(size)+" w: "+itos(mm_w)+", h: "+itos(mm_h));
-
 		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 		if (texture->flags & VS::TEXTURE_FLAG_USED_FOR_STREAMING) {
 			glTexSubImage2D(blit_target, i, 0, 0, w, h, format, type, &read[ofs]);

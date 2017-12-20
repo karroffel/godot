@@ -284,6 +284,7 @@ Error OS_X11::initialize(const VideoMode &p_desired, int p_video_driver, int p_a
 #if defined(OPENGL_ENABLED)
 
 	ContextGL_X11::ContextType opengl_api_type = ContextGL_X11::GLES_2_0_COMPATIBLE;
+	// ContextGL_X11::ContextType opengl_api_type = ContextGL_X11::GLES_3_0_COMPATIBLE;
 
 	context_gl = memnew(ContextGL_X11(x11_display, x11_window, current_videomode, opengl_api_type));
 	context_gl->initialize();
