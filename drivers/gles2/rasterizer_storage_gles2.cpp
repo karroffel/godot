@@ -1389,7 +1389,7 @@ void RasterizerStorageGLES2::_render_target_allocate(RenderTarget *rt) {
 	// color
 
 	glGenTextures(1, &rt->color);
-	glBindBuffer(GL_TEXTURE_2D, rt->color);
+	glBindTexture(GL_TEXTURE_2D, rt->color);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rt->width, rt->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 
 	if (texture->flags & VS::TEXTURE_FLAG_FILTER) {
@@ -1619,8 +1619,7 @@ void RasterizerStorageGLES2::initialize() {
 	frame.prev_tick = 0;
 	frame.delta = 0;
 	frame.current_rt = NULL;
-	frame.clear_request = true;
-	frame.clear_request_color = Color(0.0, 0.0, 1.0, 1.0);
+	frame.clear_request = false;
 	// config.keep_original_textures = false;
 
 	{

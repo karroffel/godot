@@ -43,6 +43,12 @@ class RasterizerCanvasGLES2 : public RasterizerCanvas {
 public:
 	struct Uniforms {
 		Transform projection_matrix;
+
+		Transform2D modelview_matrix;
+		Transform2D extra_matrix;
+
+		Color final_modulate;
+
 		float time;
 	};
 
@@ -83,6 +89,8 @@ public:
 	virtual void light_internal_update(RID p_rid, Light *p_light);
 	virtual void light_internal_free(RID p_rid);
 
+	void _set_uniforms();
+
 	virtual void canvas_begin();
 	virtual void canvas_end();
 
@@ -104,6 +112,7 @@ public:
 
 	RasterizerStorageGLES2::Texture *_bind_canvas_texture(const RID &p_texture, const RID &p_normal_map);
 
+	void _bind_quad_buffer();
 	void draw_generic_textured_rect(const Rect2 &p_rect, const Rect2 &p_src);
 
 	void initialize();

@@ -249,6 +249,10 @@ ShaderGLES2::Version *ShaderGLES2::get_current_version() {
 
 	strings.push_back("#version 120\n");
 
+#ifdef GLES_OVER_GL
+	strings.push_back("#define USE_GLES_OVER_GL\n");
+#endif
+
 	int define_line_ofs = 1;
 
 	for (int j = 0; j < conditional_count; j++) {
