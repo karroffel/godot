@@ -56,7 +56,7 @@ VERTEX_SHADER_CODE
 
 	color_interp = color;
 
-	gl_Position = projection_matrix * modelview_matrix * extra_matrix * outvec;
+	gl_Position = projection_matrix * modelview_matrix * outvec;
 
 }
 

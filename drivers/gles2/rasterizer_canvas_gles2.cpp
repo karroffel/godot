@@ -124,7 +124,7 @@ void RasterizerCanvasGLES2::canvas_begin() {
 
 	if (storage->frame.current_rt) {
 
-		float csy = 1.0;
+		float csy = -1.0;
 		if (storage->frame.current_rt && storage->frame.current_rt->flags[RasterizerStorage::RENDER_TARGET_VFLIP]) {
 			csy = -1.0;
 		}
@@ -223,11 +223,41 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 
 	while (p_item_list) {
 
+		state.uniforms.modelview_matrix = p_item_list->final_transform;
+
 		for (int i = 0; i < p_item_list->commands.size(); i++) {
 
 			Item::Command *command = p_item_list->commands[i];
 
 			switch (command->type) {
+
+				case Item::Command::TYPE_RECT: {
+					Item::CommandRect *r = static_cast<Item::CommandRect *>(command);
+
+					glVertexAttrib4f(VS::ARRAY_COLOR,
+							r->modulate.r,
+							r->modulate.g,
+							r->modulate.b,
+							r->modulate.a);
+
+					RasterizerStorageGLES2::Texture *tex = _bind_canvas_texture(r->texture, r->normal_map);
+
+					if (!tex) {
+						state.canvas_shader.set_uniform(CanvasShaderGLES2::SRC_RECT, Color(0, 0, 1, 1));
+					} else {
+						if (r->source != Rect2())
+							state.canvas_shader.set_uniform(CanvasShaderGLES2::SRC_RECT, Color(r->source.position.x / tex->width, r->source.position.y / tex->height, r->source.size.x / tex->width, r->source.size.y / tex->height));
+						else
+							state.canvas_shader.set_uniform(CanvasShaderGLES2::SRC_RECT, Color(0, 0, 1, 1));
+					}
+
+					state.canvas_shader.set_uniform(CanvasShaderGLES2::DST_RECT, Color(r->rect.position.x, r->rect.position.y, r->rect.size.x, r->rect.size.y));
+
+					state.canvas_shader.set_uniform(CanvasShaderGLES2::MODELVIEW_MATRIX, state.uniforms.modelview_matrix);
+
+					glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+				} break;
+
 				case Item::Command::TYPE_NINEPATCH: {
 
 					Item::CommandNinePatch *np = static_cast<Item::CommandNinePatch *>(command);
@@ -252,6 +282,8 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 					}
 
 					state.canvas_shader.set_uniform(CanvasShaderGLES2::DST_RECT, Color(np->rect.position.x, np->rect.position.y, np->rect.size.x, np->rect.size.y));
+
+					state.canvas_shader.set_uniform(CanvasShaderGLES2::MODELVIEW_MATRIX, state.uniforms.modelview_matrix);
 
 					glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
