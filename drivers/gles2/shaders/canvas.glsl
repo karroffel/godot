@@ -44,7 +44,7 @@ void main() {
 
 	outvec.xy = dst_rect.xy + (dst_rect.zw * vertex.xy);
 #else
-	vec4 outvec = vec4(0.0, 0.0, 0.0, 1.0);
+	vec4 outvec = vec4(vertex.xy, 0.0, 1.0);
 	uv_interp = vertex.xy;
 #endif
 

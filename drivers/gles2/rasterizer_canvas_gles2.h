@@ -55,6 +55,7 @@ public:
 	struct Data {
 
 		GLuint canvas_quad_vertices;
+		GLuint polygon_buffer;
 
 	} data;
 

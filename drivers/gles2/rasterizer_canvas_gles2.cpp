@@ -211,6 +211,60 @@ void RasterizerCanvasGLES2::_draw_generic(GLuint p_primitive, int p_vertex_count
 }
 
 void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_vertices, const Color *p_colors, const Vector2 *p_uvs) {
+
+	static const GLenum prim[5] = { GL_POINTS, GL_POINTS, GL_LINES, GL_TRIANGLES, GL_TRIANGLE_FAN };
+
+	int color_offset = 0;
+	int uv_offset = 0;
+	int stride = 2;
+
+	if (p_colors) {
+		color_offset = stride;
+		stride += 4;
+	}
+
+	if (p_uvs) {
+		uv_offset = stride;
+		stride += 2;
+	}
+
+	float buffer_data[(2 + 2 + 4) * 4];
+
+	for (int i = 0; i < p_points; i++) {
+		buffer_data[stride * i + 0] = p_vertices[i].x;
+		buffer_data[stride * i + 1] = p_vertices[i].y;
+	}
+
+	if (p_colors) {
+		for (int i = 0; i < p_points; i++) {
+			buffer_data[stride * i + color_offset + 0] = p_colors[i].r;
+			buffer_data[stride * i + color_offset + 1] = p_colors[i].g;
+			buffer_data[stride * i + color_offset + 2] = p_colors[i].b;
+			buffer_data[stride * i + color_offset + 3] = p_colors[i].a;
+		}
+	}
+
+	if (p_uvs) {
+		for (int i = 0; i < p_points; i++) {
+			buffer_data[stride * i + uv_offset + 0] = p_uvs[i].x;
+			buffer_data[stride * i + uv_offset + 1] = p_uvs[i].y;
+		}
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, p_points * stride * 4 * sizeof(float), buffer_data);
+
+	glVertexAttribPointer(VS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, stride * sizeof(float), NULL);
+
+	if (p_colors)
+		glVertexAttribPointer(VS::ARRAY_COLOR, 4, GL_FLOAT, GL_FALSE, stride * sizeof(float), (uint8_t *)0 + color_offset * sizeof(float));
+
+	if (p_uvs)
+		glVertexAttribPointer(VS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, stride * sizeof(float), (uint8_t *)0 + uv_offset * sizeof(float));
+
+	glDrawArrays(prim[p_points], 0, p_points);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *current_clip, bool &reclip) {
@@ -231,14 +285,53 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 
 			switch (command->type) {
 
+				case Item::Command::TYPE_LINE: {
+					Item::CommandLine *line = static_cast<Item::CommandLine *>(command);
+
+					state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_TEXTURE_RECT, false);
+					state.canvas_shader.bind();
+
+					_set_uniforms();
+
+					_bind_canvas_texture(RID(), RID());
+
+					glVertexAttrib4fv(VS::ARRAY_COLOR, line->color.components);
+
+					state.canvas_shader.set_uniform(CanvasShaderGLES2::MODELVIEW_MATRIX, state.uniforms.modelview_matrix);
+
+					if (line->width <= 1) {
+						Vector2 verts[2] = {
+							Vector2(line->from.x, line->from.y),
+							Vector2(line->to.x, line->to.y)
+						};
+
+						_draw_gui_primitive(2, verts, NULL, NULL);
+					} else {
+						Vector2 t = (line->from - line->to).normalized().tangent() * line->width * 0.5;
+
+						Vector2 verts[4] = {
+							line->from - t,
+							line->from + t,
+							line->to + t,
+							line->to - t
+						};
+
+						_draw_gui_primitive(4, verts, NULL, NULL);
+					}
+
+				} break;
+
 				case Item::Command::TYPE_RECT: {
 					Item::CommandRect *r = static_cast<Item::CommandRect *>(command);
 
-					glVertexAttrib4f(VS::ARRAY_COLOR,
-							r->modulate.r,
-							r->modulate.g,
-							r->modulate.b,
-							r->modulate.a);
+					glVertexAttrib4fv(VS::ARRAY_COLOR, r->modulate.components);
+
+					_bind_quad_buffer();
+
+					state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_TEXTURE_RECT, true);
+					state.canvas_shader.bind();
+
+					_set_uniforms();
 
 					RasterizerStorageGLES2::Texture *tex = _bind_canvas_texture(r->texture, r->normal_map);
 
@@ -262,13 +355,9 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 
 					Item::CommandNinePatch *np = static_cast<Item::CommandNinePatch *>(command);
 
-					glVertexAttrib4f(VS::ARRAY_COLOR,
-							np->color.r,
-							np->color.g,
-							np->color.b,
-							np->color.a);
+					glVertexAttrib4fv(VS::ARRAY_COLOR, np->color.components);
 
-					// set texture rect mode
+					_bind_quad_buffer(); // TODO, use a separate ninepatch buffer later
 
 					RasterizerStorageGLES2::Texture *tex = _bind_canvas_texture(np->texture, np->normal_map);
 
@@ -352,6 +441,14 @@ void RasterizerCanvasGLES2::initialize() {
 		};
 
 		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 8, qv, GL_STATIC_DRAW);
+
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+	}
+
+	{
+		glGenBuffers(1, &data.polygon_buffer);
+		glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
+		glBufferData(GL_ARRAY_BUFFER, (2 + 2 + 4) * 4 * sizeof(float), NULL, GL_DYNAMIC_DRAW);
 
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
