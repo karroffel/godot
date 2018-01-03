@@ -1277,11 +1277,60 @@ void RasterizerStorageGLES2::gi_probe_dynamic_data_update(RID p_gi_probe_data, i
 
 ///////
 
+RID RasterizerStorageGLES2::lightmap_capture_create() {
+	return RID();
+}
+
+void RasterizerStorageGLES2::lightmap_capture_set_bounds(RID p_capture, const AABB &p_bounds) {
+}
+
+AABB RasterizerStorageGLES2::lightmap_capture_get_bounds(RID p_capture) const {
+	return AABB();
+}
+
+void RasterizerStorageGLES2::lightmap_capture_set_octree(RID p_capture, const PoolVector<uint8_t> &p_octree) {
+}
+
+PoolVector<uint8_t> RasterizerStorageGLES2::lightmap_capture_get_octree(RID p_capture) const {
+	return PoolVector<uint8_t>();
+}
+
+void RasterizerStorageGLES2::lightmap_capture_set_octree_cell_transform(RID p_capture, const Transform &p_xform) {
+}
+
+Transform RasterizerStorageGLES2::lightmap_capture_get_octree_cell_transform(RID p_capture) const {
+	return Transform();
+}
+
+void RasterizerStorageGLES2::lightmap_capture_set_octree_cell_subdiv(RID p_capture, int p_subdiv) {
+}
+
+int RasterizerStorageGLES2::lightmap_capture_get_octree_cell_subdiv(RID p_capture) const {
+	return 0;
+}
+
+void RasterizerStorageGLES2::lightmap_capture_set_energy(RID p_capture, float p_energy) {
+}
+
+float RasterizerStorageGLES2::lightmap_capture_get_energy(RID p_capture) const {
+	return 0.0;
+}
+
+const PoolVector<RasterizerStorage::LightmapCaptureOctree> *RasterizerStorageGLES2::lightmap_capture_get_octree_ptr(RID p_capture) const {
+	return NULL;
+}
+
+///////
+
 RID RasterizerStorageGLES2::particles_create() {
 	return RID();
 }
 
 void RasterizerStorageGLES2::particles_set_emitting(RID p_particles, bool p_emitting) {
+}
+
+bool RasterizerStorageGLES2::particles_get_emitting(RID p_particles) {
+	return false;
 }
 
 void RasterizerStorageGLES2::particles_set_amount(RID p_particles, int p_amount) {
