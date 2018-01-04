@@ -13,6 +13,7 @@ uniform highp mat4 modelview_matrix;
 uniform highp mat4 extra_matrix;
 attribute highp vec2 vertex; // attrib:0
 attribute vec4 color_attrib; // attrib:3
+attribute vec2 uv_attrib; // attrib:4
 
 varying vec2 uv_interp;
 varying vec4 color_interp;
@@ -45,7 +46,13 @@ void main() {
 	outvec.xy = dst_rect.xy + (dst_rect.zw * vertex.xy);
 #else
 	vec4 outvec = vec4(vertex.xy, 0.0, 1.0);
+
+#ifdef USE_UV_ATTRIBUTE
+	uv_interp = uv_attrib;
+#else
 	uv_interp = vertex.xy;
+#endif
+
 #endif
 
 {

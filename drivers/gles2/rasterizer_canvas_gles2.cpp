@@ -286,9 +286,11 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 			switch (command->type) {
 
 				case Item::Command::TYPE_LINE: {
+
 					Item::CommandLine *line = static_cast<Item::CommandLine *>(command);
 
 					state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_TEXTURE_RECT, false);
+					state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_UV_ATTRIBUTE, false);
 					state.canvas_shader.bind();
 
 					_set_uniforms();
@@ -329,9 +331,9 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 					_bind_quad_buffer();
 
 					state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_TEXTURE_RECT, true);
-					state.canvas_shader.bind();
-
-					_set_uniforms();
+					state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_UV_ATTRIBUTE, false);
+					if (state.canvas_shader.bind())
+						_set_uniforms();
 
 					RasterizerStorageGLES2::Texture *tex = _bind_canvas_texture(r->texture, r->normal_map);
 
@@ -355,26 +357,152 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 
 					Item::CommandNinePatch *np = static_cast<Item::CommandNinePatch *>(command);
 
-					glVertexAttrib4fv(VS::ARRAY_COLOR, np->color.components);
+					state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_TEXTURE_RECT, false);
+					state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_UV_ATTRIBUTE, true);
+					if (state.canvas_shader.bind())
+						_set_uniforms();
 
-					_bind_quad_buffer(); // TODO, use a separate ninepatch buffer later
+					glVertexAttrib4fv(VS::ARRAY_COLOR, np->color.components);
 
 					RasterizerStorageGLES2::Texture *tex = _bind_canvas_texture(np->texture, np->normal_map);
 
 					if (!tex) {
-						state.canvas_shader.set_uniform(CanvasShaderGLES2::SRC_RECT, Color(0, 0, 1, 1));
-					} else {
-						if (np->source != Rect2())
-							state.canvas_shader.set_uniform(CanvasShaderGLES2::SRC_RECT, Color(np->source.position.x / tex->width, np->source.position.y / tex->height, np->source.size.x / tex->width, np->source.size.y / tex->height));
-						else
-							state.canvas_shader.set_uniform(CanvasShaderGLES2::SRC_RECT, Color(0, 0, 1, 1));
+						print_line("TODO: ninepatch without texture");
+						continue;
 					}
 
-					state.canvas_shader.set_uniform(CanvasShaderGLES2::DST_RECT, Color(np->rect.position.x, np->rect.position.y, np->rect.size.x, np->rect.size.y));
+					Size2 texpixel_size(1.0 / tex->width, 1.0 / tex->height);
 
 					state.canvas_shader.set_uniform(CanvasShaderGLES2::MODELVIEW_MATRIX, state.uniforms.modelview_matrix);
 
-					glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+					// prepare vertex buffer
+
+					float buffer[16 * 2 + 16 * 2];
+
+					{
+
+						// first row
+
+						buffer[(0 * 4 * 4) + 0] = np->rect.position.x;
+						buffer[(0 * 4 * 4) + 1] = np->rect.position.y;
+
+						buffer[(0 * 4 * 4) + 2] = np->source.position.x * texpixel_size.x;
+						buffer[(0 * 4 * 4) + 3] = np->source.position.y * texpixel_size.y;
+
+						buffer[(0 * 4 * 4) + 4] = np->rect.position.x + np->margin[MARGIN_LEFT];
+						buffer[(0 * 4 * 4) + 5] = np->rect.position.y;
+
+						buffer[(0 * 4 * 4) + 6] = (np->source.position.x + np->margin[MARGIN_LEFT]) * texpixel_size.x;
+						buffer[(0 * 4 * 4) + 7] = np->source.position.y * texpixel_size.y;
+
+						buffer[(0 * 4 * 4) + 8] = np->rect.position.x + np->rect.size.x - np->margin[MARGIN_RIGHT];
+						buffer[(0 * 4 * 4) + 9] = np->rect.position.y;
+
+						buffer[(0 * 4 * 4) + 10] = (np->source.position.x + np->source.size.x - np->margin[MARGIN_RIGHT]) * texpixel_size.x;
+						buffer[(0 * 4 * 4) + 11] = np->source.position.y * texpixel_size.y;
+
+						buffer[(0 * 4 * 4) + 12] = np->rect.position.x + np->rect.size.x;
+						buffer[(0 * 4 * 4) + 13] = np->rect.position.y;
+
+						buffer[(0 * 4 * 4) + 14] = (np->source.position.x + np->source.size.x) * texpixel_size.x;
+						buffer[(0 * 4 * 4) + 15] = np->source.position.y * texpixel_size.y;
+
+						// second row
+
+						buffer[(1 * 4 * 4) + 0] = np->rect.position.x;
+						buffer[(1 * 4 * 4) + 1] = np->rect.position.y + np->margin[MARGIN_TOP];
+
+						buffer[(1 * 4 * 4) + 2] = np->source.position.x * texpixel_size.x;
+						buffer[(1 * 4 * 4) + 3] = (np->source.position.y + np->margin[MARGIN_TOP]) * texpixel_size.y;
+
+						buffer[(1 * 4 * 4) + 4] = np->rect.position.x + np->margin[MARGIN_LEFT];
+						buffer[(1 * 4 * 4) + 5] = np->rect.position.y + np->margin[MARGIN_TOP];
+
+						buffer[(1 * 4 * 4) + 6] = (np->source.position.x + np->margin[MARGIN_LEFT]) * texpixel_size.x;
+						buffer[(1 * 4 * 4) + 7] = (np->source.position.y + np->margin[MARGIN_TOP]) * texpixel_size.y;
+
+						buffer[(1 * 4 * 4) + 8] = np->rect.position.x + np->rect.size.x - np->margin[MARGIN_RIGHT];
+						buffer[(1 * 4 * 4) + 9] = np->rect.position.y + np->margin[MARGIN_TOP];
+
+						buffer[(1 * 4 * 4) + 10] = (np->source.position.x + np->source.size.x - np->margin[MARGIN_RIGHT]) * texpixel_size.x;
+						buffer[(1 * 4 * 4) + 11] = (np->source.position.y + np->margin[MARGIN_TOP]) * texpixel_size.y;
+
+						buffer[(1 * 4 * 4) + 12] = np->rect.position.x + np->rect.size.x;
+						buffer[(1 * 4 * 4) + 13] = np->rect.position.y + np->margin[MARGIN_TOP];
+
+						buffer[(1 * 4 * 4) + 14] = (np->source.position.x + np->source.size.x) * texpixel_size.x;
+						buffer[(1 * 4 * 4) + 15] = (np->source.position.y + np->margin[MARGIN_TOP]) * texpixel_size.y;
+
+						// thrid row
+
+						buffer[(2 * 4 * 4) + 0] = np->rect.position.x;
+						buffer[(2 * 4 * 4) + 1] = np->rect.position.y + np->rect.size.y - np->margin[MARGIN_BOTTOM];
+
+						buffer[(2 * 4 * 4) + 2] = np->source.position.x * texpixel_size.x;
+						buffer[(2 * 4 * 4) + 3] = (np->source.position.y + np->source.size.y - np->margin[MARGIN_BOTTOM]) * texpixel_size.y;
+
+						buffer[(2 * 4 * 4) + 4] = np->rect.position.x + np->margin[MARGIN_LEFT];
+						buffer[(2 * 4 * 4) + 5] = np->rect.position.y + np->rect.size.y - np->margin[MARGIN_BOTTOM];
+
+						buffer[(2 * 4 * 4) + 6] = (np->source.position.x + np->margin[MARGIN_LEFT]) * texpixel_size.x;
+						buffer[(2 * 4 * 4) + 7] = (np->source.position.y + np->source.size.y - np->margin[MARGIN_BOTTOM]) * texpixel_size.y;
+
+						buffer[(2 * 4 * 4) + 8] = np->rect.position.x + np->rect.size.x - np->margin[MARGIN_RIGHT];
+						buffer[(2 * 4 * 4) + 9] = np->rect.position.y + np->rect.size.y - np->margin[MARGIN_BOTTOM];
+
+						buffer[(2 * 4 * 4) + 10] = (np->source.position.x + np->source.size.x - np->margin[MARGIN_RIGHT]) * texpixel_size.x;
+						buffer[(2 * 4 * 4) + 11] = (np->source.position.y + np->source.size.y - np->margin[MARGIN_BOTTOM]) * texpixel_size.y;
+
+						buffer[(2 * 4 * 4) + 12] = np->rect.position.x + np->rect.size.x;
+						buffer[(2 * 4 * 4) + 13] = np->rect.position.y + np->rect.size.y - np->margin[MARGIN_BOTTOM];
+
+						buffer[(2 * 4 * 4) + 14] = (np->source.position.x + np->source.size.x) * texpixel_size.x;
+						buffer[(2 * 4 * 4) + 15] = (np->source.position.y + np->source.size.y - np->margin[MARGIN_BOTTOM]) * texpixel_size.y;
+
+						// fourth row
+
+						buffer[(3 * 4 * 4) + 0] = np->rect.position.x;
+						buffer[(3 * 4 * 4) + 1] = np->rect.position.y + np->rect.size.y;
+
+						buffer[(3 * 4 * 4) + 2] = np->source.position.x * texpixel_size.x;
+						buffer[(3 * 4 * 4) + 3] = (np->source.position.y + np->source.size.y) * texpixel_size.y;
+
+						buffer[(3 * 4 * 4) + 4] = np->rect.position.x + np->margin[MARGIN_LEFT];
+						buffer[(3 * 4 * 4) + 5] = np->rect.position.y + np->rect.size.y;
+
+						buffer[(3 * 4 * 4) + 6] = (np->source.position.x + np->margin[MARGIN_LEFT]) * texpixel_size.x;
+						buffer[(3 * 4 * 4) + 7] = (np->source.position.y + np->source.size.y) * texpixel_size.y;
+
+						buffer[(3 * 4 * 4) + 8] = np->rect.position.x + np->rect.size.x - np->margin[MARGIN_RIGHT];
+						buffer[(3 * 4 * 4) + 9] = np->rect.position.y + np->rect.size.y;
+
+						buffer[(3 * 4 * 4) + 10] = (np->source.position.x + np->source.size.x - np->margin[MARGIN_RIGHT]) * texpixel_size.x;
+						buffer[(3 * 4 * 4) + 11] = (np->source.position.y + np->source.size.y) * texpixel_size.y;
+
+						buffer[(3 * 4 * 4) + 12] = np->rect.position.x + np->rect.size.x;
+						buffer[(3 * 4 * 4) + 13] = np->rect.position.y + np->rect.size.y;
+
+						buffer[(3 * 4 * 4) + 14] = (np->source.position.x + np->source.size.x) * texpixel_size.x;
+						buffer[(3 * 4 * 4) + 15] = (np->source.position.y + np->source.size.y) * texpixel_size.y;
+
+						// print_line(String::num((np->source.position.y + np->source.size.y) * texpixel_size.y));
+					}
+
+					glBindBuffer(GL_ARRAY_BUFFER, data.ninepatch_vertices);
+					glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * (16 + 16) * 2, buffer);
+
+					glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ninepatch_elements);
+
+					glEnableVertexAttribArray(VS::ARRAY_VERTEX);
+					glEnableVertexAttribArray(VS::ARRAY_TEX_UV);
+
+					glVertexAttribPointer(VS::ARRAY_VERTEX, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), NULL);
+					glVertexAttribPointer(VS::ARRAY_TEX_UV, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (uint8_t *)0 + (sizeof(float) * 2));
+
+					glDrawElements(GL_TRIANGLES, 18 * 3 - (np->draw_center ? 0 : 6), GL_UNSIGNED_BYTE, NULL);
+
+					glBindBuffer(GL_ARRAY_BUFFER, 0);
+					glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
 				} break;
 
@@ -429,6 +557,7 @@ void RasterizerCanvasGLES2::draw_window_margins(int *black_margin, RID *black_im
 
 void RasterizerCanvasGLES2::initialize() {
 
+	// quad buffer
 	{
 		glGenBuffers(1, &data.canvas_quad_vertices);
 		glBindBuffer(GL_ARRAY_BUFFER, data.canvas_quad_vertices);
@@ -445,12 +574,77 @@ void RasterizerCanvasGLES2::initialize() {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
 
+	// polygon buffer
 	{
 		glGenBuffers(1, &data.polygon_buffer);
 		glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
 		glBufferData(GL_ARRAY_BUFFER, (2 + 2 + 4) * 4 * sizeof(float), NULL, GL_DYNAMIC_DRAW);
 
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
+	}
+
+	// ninepatch buffers
+	{
+		// array buffer
+		glGenBuffers(1, &data.ninepatch_vertices);
+		glBindBuffer(GL_ARRAY_BUFFER, data.ninepatch_vertices);
+
+		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * (16 + 16) * 2, NULL, GL_DYNAMIC_DRAW);
+
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+		// element buffer
+		glGenBuffers(1, &data.ninepatch_elements);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ninepatch_elements);
+
+#define _EIDX(y, x) (y * 4 + x)
+		uint8_t elems[3 * 2 * 9] = {
+
+			// first row
+
+			_EIDX(0, 0), _EIDX(0, 1), _EIDX(1, 1),
+			_EIDX(1, 1), _EIDX(1, 0), _EIDX(0, 0),
+
+			_EIDX(0, 1), _EIDX(0, 2), _EIDX(1, 2),
+			_EIDX(1, 2), _EIDX(1, 1), _EIDX(0, 1),
+
+			_EIDX(0, 2), _EIDX(0, 3), _EIDX(1, 3),
+			_EIDX(1, 3), _EIDX(1, 2), _EIDX(0, 2),
+
+			// second row
+
+			_EIDX(1, 0), _EIDX(1, 1), _EIDX(2, 1),
+			_EIDX(2, 1), _EIDX(2, 0), _EIDX(1, 0),
+
+			// the center one would be here, but we'll put it at the end
+			// so it's easier to disable the center and be able to use
+			// one draw call for both
+
+			_EIDX(1, 2), _EIDX(1, 3), _EIDX(2, 3),
+			_EIDX(2, 3), _EIDX(2, 2), _EIDX(1, 2),
+
+			// third row
+
+			_EIDX(2, 0), _EIDX(2, 1), _EIDX(3, 1),
+			_EIDX(3, 1), _EIDX(3, 0), _EIDX(2, 0),
+
+			_EIDX(2, 1), _EIDX(2, 2), _EIDX(3, 2),
+			_EIDX(3, 2), _EIDX(3, 1), _EIDX(2, 1),
+
+			_EIDX(2, 2), _EIDX(2, 3), _EIDX(3, 3),
+			_EIDX(3, 3), _EIDX(3, 2), _EIDX(2, 2),
+
+			// center field
+
+			_EIDX(1, 1), _EIDX(1, 2), _EIDX(2, 2),
+			_EIDX(2, 2), _EIDX(2, 1), _EIDX(1, 1)
+		};
+		;
+#undef _EIDX
+
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(elems), elems, GL_STATIC_DRAW);
+
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
 
 	state.canvas_shader.init();
