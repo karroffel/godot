@@ -56,6 +56,7 @@ public:
 
 		GLuint canvas_quad_vertices;
 		GLuint polygon_buffer;
+		GLuint polygon_index_buffer;
 
 		GLuint ninepatch_vertices;
 		GLuint ninepatch_elements;

@@ -268,8 +268,6 @@ public:
 		SelfList<Material>::List materials;
 
 		Map<StringName, ShaderLanguage::ShaderNode::Uniform> uniforms;
-		Vector<uint32_t> ubo_offsets;
-		uint32_t ubo_size;
 
 		uint32_t texture_count;
 
@@ -298,6 +296,7 @@ public:
 
 			int blend_mode;
 
+			/*
 			enum LightMode {
 				LIGHT_MODE_NORMAL,
 				LIGHT_MODE_UNSHADED,
@@ -305,12 +304,14 @@ public:
 			};
 
 			int light_mode;
+			*/
 			bool uses_screen_texture;
 			bool uses_screen_uv;
 			bool uses_time;
 
 		} canvas_item;
 
+		/*
 		struct Spatial {
 
 			enum BlendMode {
@@ -357,6 +358,7 @@ public:
 		struct Particles {
 
 		} particles;
+		*/
 
 		bool uses_vertex_time;
 		bool uses_fragment_time;
@@ -365,7 +367,6 @@ public:
 				dirty_list(this) {
 
 			shader = NULL;
-			ubo_size = 0;
 			valid = false;
 			custom_code_id = 0;
 			version = 1;
@@ -393,8 +394,6 @@ public:
 	struct Material : public RID_Data {
 
 		Shader *shader;
-		GLuint ubo_id;
-		uint32_t ubo_size;
 		Map<StringName, Variant> params;
 		SelfList<Material> list;
 		SelfList<Material> dirty_list;
@@ -420,8 +419,6 @@ public:
 			is_animated_cache = false;
 			shader = NULL;
 			line_width = 1.0;
-			ubo_id = 0;
-			ubo_size = 0;
 			last_pass = 0;
 			render_priority = 0;
 		}
