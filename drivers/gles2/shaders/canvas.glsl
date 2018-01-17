@@ -29,6 +29,15 @@ uniform bool blit_pass;
 
 VERTEX_SHADER_GLOBALS
 
+vec2 select(vec2 a, vec2 b, bvec2 c) {
+	vec2 ret;
+
+	ret.x = c.x ? b.x : a.x;
+	ret.y = c.y ? b.y : a.y;
+
+	return ret;
+}
+
 void main() {
 
 	vec4 color = color_attrib;
@@ -43,9 +52,15 @@ void main() {
 
 	vec4 outvec = vec4(0.0, 0.0, 0.0, 1.0);
 
-	vec2 mix_value = vec2(0.0, 0.0);
+	// This is what is done in the GLES 3 bindings and should
+	// take care of flipped rects.
+	//
+	// But it doesn't.
+	// I don't know why, will need to investigate further.
 
-	outvec.xy = dst_rect.xy + dst_rect.zw * mix(vertex, vec2(1.0, 1.0) - vertex, mix_value);
+	// outvec.xy = dst_rect.xy + abs(dst_rect.zw) * select(vertex, vec2(1.0, 1.0) - vertex, lessThan(src_rect.zw, vec2(0.0, 0.0)));
+
+	outvec.xy = dst_rect.xy + abs(dst_rect.zw) * vertex;
 #else
 	vec4 outvec = vec4(vertex.xy, 0.0, 1.0);
 
