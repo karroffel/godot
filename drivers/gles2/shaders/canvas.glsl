@@ -43,7 +43,9 @@ void main() {
 
 	vec4 outvec = vec4(0.0, 0.0, 0.0, 1.0);
 
-	outvec.xy = dst_rect.xy + (dst_rect.zw * vertex.xy);
+	vec2 mix_value = vec2(0.0, 0.0);
+
+	outvec.xy = dst_rect.xy + dst_rect.zw * mix(vertex, vec2(1.0, 1.0) - vertex, mix_value);
 #else
 	vec4 outvec = vec4(vertex.xy, 0.0, 1.0);
 

@@ -1477,7 +1477,21 @@ void RasterizerStorageGLES2::_render_target_allocate(RenderTarget *rt) {
 		texture->tex_id = 0;
 		texture->active = false;
 		WARN_PRINT("Could not create framebuffer!!");
+		return;
 	}
+
+	texture->format = Image::FORMAT_RGBA8;
+	texture->gl_format_cache = GL_RGBA;
+	texture->gl_type_cache = GL_UNSIGNED_BYTE;
+	texture->gl_internal_format_cache = GL_RGBA;
+	texture->tex_id = rt->color;
+	texture->width = rt->width;
+	texture->alloc_width = rt->width;
+	texture->height = rt->height;
+	texture->alloc_height = rt->height;
+	texture->active = true;
+
+	texture_set_flags(rt->texture, texture->flags);
 }
 
 void RasterizerStorageGLES2::_render_target_clear(RenderTarget *rt) {
@@ -1531,8 +1545,6 @@ RID RasterizerStorageGLES2::render_target_create() {
 }
 
 void RasterizerStorageGLES2::render_target_set_size(RID p_render_target, int p_width, int p_height) {
-
-	print_line("set_render_target_size");
 
 	RenderTarget *rt = render_target_owner.getornull(p_render_target);
 	ERR_FAIL_COND(!rt);

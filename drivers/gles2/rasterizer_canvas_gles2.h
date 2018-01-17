@@ -58,6 +58,8 @@ public:
 		GLuint polygon_buffer;
 		GLuint polygon_index_buffer;
 
+		uint32_t polygon_buffer_size;
+
 		GLuint ninepatch_vertices;
 		GLuint ninepatch_elements;
 
@@ -77,10 +79,6 @@ public:
 		RasterizerStorageGLES2::Texture *current_tex_ptr;
 
 		Transform vp;
-
-		Color canvas_item_modulate;
-		Transform2D extra_matrix;
-		Transform2D final_transform;
 
 	} state;
 
