@@ -210,6 +210,7 @@ void RasterizerCanvasGLES2::_draw_polygon(const int *p_indices, int p_index_coun
 }
 
 void RasterizerCanvasGLES2::_draw_generic(GLuint p_primitive, int p_vertex_count, const Vector2 *p_vertices, const Vector2 *p_uvs, const Color *p_colors, bool p_singlecolor) {
+
 	glBindBuffer(GL_ARRAY_BUFFER, data.polygon_buffer);
 
 	uint32_t buffer_ofs = 0;
@@ -401,6 +402,7 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 
 					Size2 texpixel_size(1.0 / tex->width, 1.0 / tex->height);
 					Rect2 src_rect = (r->flags & CANVAS_RECT_REGION) ? Rect2(r->source.position * texpixel_size, r->source.size * texpixel_size) : Rect2(0, 0, 1, 1);
+
 					Rect2 dst_rect = Rect2(r->rect.position, r->rect.size);
 
 					if (dst_rect.size.width < 0) {
@@ -746,7 +748,10 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 
 			if (current_clip) {
 				glEnable(GL_SCISSOR_TEST);
-				glScissor(current_clip->final_clip_rect.position.x, (rt_size.height - (current_clip->final_clip_rect.position.y + current_clip->final_clip_rect.size.height)), current_clip->final_clip_rect.size.width, current_clip->final_clip_rect.size.height);
+				glScissor(current_clip->final_clip_rect.position.x,
+						current_clip->final_clip_rect.position.y,
+						current_clip->final_clip_rect.size.width,
+						current_clip->final_clip_rect.size.height);
 			} else {
 				glDisable(GL_SCISSOR_TEST);
 			}
@@ -888,7 +893,10 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 
 		if (reclip) {
 			glEnable(GL_SCISSOR_TEST);
-			glScissor(current_clip->final_clip_rect.position.x, (rt_size.height - (current_clip->final_clip_rect.position.y + current_clip->final_clip_rect.size.height)), current_clip->final_clip_rect.size.width, current_clip->final_clip_rect.size.height);
+			glScissor(current_clip->final_clip_rect.position.x,
+					current_clip->final_clip_rect.position.y,
+					current_clip->final_clip_rect.size.width,
+					current_clip->final_clip_rect.size.height);
 		}
 
 		p_item_list = p_item_list->next;
