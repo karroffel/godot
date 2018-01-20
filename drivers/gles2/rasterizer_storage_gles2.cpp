@@ -704,8 +704,6 @@ RID RasterizerStorageGLES2::shader_create() {
 	_shader_make_dirty(shader);
 	shader->self = rid;
 
-	print_line("shader create");
-
 	return rid;
 }
 
@@ -717,13 +715,119 @@ void RasterizerStorageGLES2::_shader_make_dirty(Shader *p_shader) {
 }
 
 void RasterizerStorageGLES2::shader_set_code(RID p_shader, const String &p_code) {
+
+	Shader *shader = shader_owner.getornull(p_shader);
+	ERR_FAIL_COND(!shader);
+
+	shader->code = p_code;
+
+	String mode_string = ShaderLanguage::get_shader_type(p_code);
+	VS::ShaderMode mode;
+
+	if (mode_string == "canvas_item")
+		mode = VS::SHADER_CANVAS_ITEM;
+	else if (mode_string == "particles")
+		mode = VS::SHADER_PARTICLES;
+	else
+		mode = VS::SHADER_SPATIAL;
+
+	if (shader->custom_code_id && mode != shader->mode) {
+		shader->shader->free_custom_shader(shader->custom_code_id);
+		shader->custom_code_id = 0;
+	}
+
+	shader->mode = mode;
+
+	// TODO handle all shader types
+	if (mode == VS::SHADER_CANVAS_ITEM) {
+		shader->shader = &canvas->state.canvas_shader;
+
+		print_line(p_code);
+
+	} else {
+		return;
+	}
+
+	if (shader->custom_code_id == 0) {
+		shader->custom_code_id = shader->shader->create_custom_shader();
+	}
+
+	_shader_make_dirty(shader);
 }
 
 String RasterizerStorageGLES2::shader_get_code(RID p_shader) const {
-	return "";
+
+	const Shader *shader = shader_owner.get(p_shader);
+	ERR_FAIL_COND_V(!shader, "");
+
+	return shader->code;
+}
+
+void RasterizerStorageGLES2::_update_shader(Shader *p_shader) const {
+
+	_shader_dirty_list.remove(&p_shader->dirty_list);
+
+	p_shader->valid = false;
+
+	p_shader->uniforms.clear();
+
+	ShaderCompilerGLES2::GeneratedCode gen_code;
+	ShaderCompilerGLES2::IdentifierActions *actions = NULL;
+
+	switch (p_shader->mode) {
+
+		case VS::SHADER_CANVAS_ITEM: {
+
+			p_shader->canvas_item.blend_mode = Shader::CanvasItem::BLEND_MODE_MIX;
+
+			p_shader->canvas_item.uses_screen_texture = false;
+			p_shader->canvas_item.uses_screen_uv = false;
+			p_shader->canvas_item.uses_time = false;
+
+			shaders.actions_canvas.render_mode_values["blend_add"] = Pair<int *, int>(&p_shader->canvas_item.blend_mode, Shader::CanvasItem::BLEND_MODE_ADD);
+			shaders.actions_canvas.render_mode_values["blend_mix"] = Pair<int *, int>(&p_shader->canvas_item.blend_mode, Shader::CanvasItem::BLEND_MODE_MIX);
+			shaders.actions_canvas.render_mode_values["blend_sub"] = Pair<int *, int>(&p_shader->canvas_item.blend_mode, Shader::CanvasItem::BLEND_MODE_SUB);
+			shaders.actions_canvas.render_mode_values["blend_mul"] = Pair<int *, int>(&p_shader->canvas_item.blend_mode, Shader::CanvasItem::BLEND_MODE_MUL);
+			shaders.actions_canvas.render_mode_values["blend_premul_alpha"] = Pair<int *, int>(&p_shader->canvas_item.blend_mode, Shader::CanvasItem::BLEND_MODE_PMALPHA);
+
+			// shaders.actions_canvas.render_mode_values["unshaded"] = Pair<int *, int>(&p_shader->canvas_item.light_mode, Shader::CanvasItem::LIGHT_MODE_UNSHADED);
+			// shaders.actions_canvas.render_mode_values["light_only"] = Pair<int *, int>(&p_shader->canvas_item.light_mode, Shader::CanvasItem::LIGHT_MODE_LIGHT_ONLY);
+
+			shaders.actions_canvas.usage_flag_pointers["SCREEN_UV"] = &p_shader->canvas_item.uses_screen_uv;
+			shaders.actions_canvas.usage_flag_pointers["SCREEN_PIXEL_SIZE"] = &p_shader->canvas_item.uses_screen_uv;
+			shaders.actions_canvas.usage_flag_pointers["SCREEN_TEXTURE"] = &p_shader->canvas_item.uses_screen_texture;
+			shaders.actions_canvas.usage_flag_pointers["TIME"] = &p_shader->canvas_item.uses_time;
+
+			actions = &shaders.actions_canvas;
+			actions->uniforms = &p_shader->uniforms;
+		} break;
+
+		default: {
+			return;
+		} break;
+	}
+
+	Error err = shaders.compiler.compile(p_shader->mode, p_shader->code, actions, p_shader->path, gen_code);
+
+	ERR_FAIL_COND(err != OK);
+
+	print_line("-------------------");
+
+	for (int i = 0; i < gen_code.custom_defines.size(); i++) {
+		print_line(gen_code.custom_defines[i].ptr());
+	}
+
+	print_line(gen_code.fragment_global);
+
+	print_line("-------------------");
+
+	p_shader->shader->set_custom_shader_code(p_shader->custom_code_id, gen_code.vertex, gen_code.vertex_global, gen_code.fragment, gen_code.light, gen_code.fragment_global, gen_code.uniforms, gen_code.texture_uniforms, gen_code.custom_defines);
 }
 
 void RasterizerStorageGLES2::update_dirty_shaders() {
+	while (_shader_dirty_list.first()) {
+		_update_shader(_shader_dirty_list.first()->self());
+	}
 }
 
 void RasterizerStorageGLES2::shader_get_param_list(RID p_shader, List<PropertyInfo> *p_param_list) const {
@@ -808,6 +912,9 @@ void RasterizerStorageGLES2::material_remove_instance_owner(RID p_material, Rast
 }
 
 void RasterizerStorageGLES2::material_set_render_priority(RID p_material, int priority) {
+}
+
+void RasterizerStorageGLES2::update_dirty_materials() {
 }
 
 /* MESH API */
@@ -1744,6 +1851,8 @@ void RasterizerStorageGLES2::finalize() {
 }
 
 void RasterizerStorageGLES2::update_dirty_resources() {
+	update_dirty_shaders();
+	update_dirty_materials();
 }
 
 RasterizerStorageGLES2::RasterizerStorageGLES2() {

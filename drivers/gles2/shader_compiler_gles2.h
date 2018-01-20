@@ -35,6 +35,8 @@
 #include "servers/visual/shader_types.h"
 #include "servers/visual_server.h"
 
+#include "string_builder.h"
+
 class ShaderCompilerGLES2 {
 public:
 	struct IdentifierActions {
@@ -49,13 +51,11 @@ public:
 
 	struct GeneratedCode {
 
-		Vector<CharString> defines;
+		Vector<CharString> custom_defines;
+		Vector<StringName> uniforms;
 		Vector<StringName> texture_uniforms;
 		Vector<ShaderLanguage::ShaderNode::Uniform::Hint> texture_hints;
 
-		Vector<uint32_t> uniform_offsets;
-		uint32_t uniform_total_size;
-		String uniforms;
 		String vertex_global;
 		String vertex;
 		String fragment_global;
@@ -76,7 +76,7 @@ private:
 		Map<StringName, String> usage_defines;
 	};
 
-	void _dump_function_deps(ShaderLanguage::ShaderNode *p_node, const StringName &p_for_func, const Map<StringName, String> &p_func_code, String &r_to_add, Set<StringName> &added);
+	void _dump_function_deps(ShaderLanguage::ShaderNode *p_node, const StringName &p_for_func, const Map<StringName, String> &p_func_code, StringBuilder &r_to_add, Set<StringName> &r_added);
 	String _dump_node_code(ShaderLanguage::Node *p_node, int p_level, GeneratedCode &r_gen_code, IdentifierActions &p_actions, const DefaultIdentifierActions &p_default_actions);
 
 	StringName current_func_name;

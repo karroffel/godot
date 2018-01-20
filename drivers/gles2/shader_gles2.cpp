@@ -35,7 +35,7 @@
 
 //#define DEBUG_OPENGL
 
-#include "shaders/copy.glsl.gen.h"
+// #include "shaders/copy.glsl.gen.h"
 
 #ifdef DEBUG_OPENGL
 
@@ -285,14 +285,14 @@ ShaderGLES2::Version *ShaderGLES2::get_current_version() {
 	v.id = glCreateProgram();
 	ERR_FAIL_COND_V(v.id == 0, NULL);
 
-	// vertex shader
-
 	if (cc) {
 		for (int i = 0; i < cc->custom_defines.size(); i++) {
 			strings.push_back(cc->custom_defines[i]);
 			DEBUG_PRINT("CD #" + itos(i) + ": " + String(cc->custom_defines[i]));
 		}
 	}
+
+	// vertex shader
 
 	int string_base_size = strings.size();
 

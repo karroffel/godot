@@ -92,6 +92,16 @@ public:
 
 	} resources;
 
+	mutable struct Shaders {
+
+		ShaderCompilerGLES2 compiler;
+
+		ShaderCompilerGLES2::IdentifierActions actions_canvas;
+		ShaderCompilerGLES2::IdentifierActions actions_scene;
+		ShaderCompilerGLES2::IdentifierActions actions_particles;
+
+	} shaders;
+
 	struct Info {
 
 		uint64_t texture_mem;
@@ -387,6 +397,7 @@ public:
 	virtual void shader_set_default_texture_param(RID p_shader, const StringName &p_name, RID p_texture);
 	virtual RID shader_get_default_texture_param(RID p_shader, const StringName &p_name) const;
 
+	void _update_shader(Shader *p_shader) const;
 	void update_dirty_shaders();
 
 	/* COMMON MATERIAL API */
