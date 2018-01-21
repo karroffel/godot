@@ -594,7 +594,28 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 			} break;
 
 			case Item::Command::TYPE_CIRCLE: {
-				print_line("circle");
+
+				Item::CommandCircle *circle = static_cast<Item::CommandCircle *>(command);
+
+				state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_TEXTURE_RECT, false);
+				state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_UV_ATTRIBUTE, false);
+
+				static const int num_points = 32;
+
+				Vector2 points[num_points + 1];
+				points[num_points] = circle->pos;
+
+				int indices[num_points * 3];
+
+				for (int i = 0; i < num_points; i++) {
+					points[i] = circle->pos + Vector2(Math::sin(i * Math_PI * 2.0 / num_points), Math::cos(i * Math_PI * 2.0 / num_points)) * circle->radius;
+					indices[i * 3 + 0] = i;
+					indices[i * 3 + 1] = (i + 1) % num_points;
+					indices[i * 3 + 2] = num_points;
+				}
+
+				_bind_canvas_texture(RID(), RID());
+				_draw_polygon(indices, num_points * 3, num_points + 1, points, NULL, &circle->color, true);
 			} break;
 
 			case Item::Command::TYPE_POLYGON: {
