@@ -78,7 +78,11 @@ static String _opstr(SL::Operator p_op) {
 
 static String _mkid(const String &p_id) {
 
-	return "m_" + p_id;
+	StringBuffer id;
+	id += "m_";
+	id += p_id;
+
+	return id.as_string();
 }
 
 static String f2sp0(float p_float) {
@@ -97,7 +101,12 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 		case SL::TYPE_BVEC3:
 		case SL::TYPE_BVEC4: {
 
-			String text = "bvec" + itos(p_type - SL::TYPE_BOOL + 1) + "(";
+			StringBuffer text;
+
+			text += "bvec";
+			text += itos(p_type - SL::TYPE_BOOL + 1);
+			text += "(";
+
 			for (int i = 0; i < p_values.size(); i++) {
 				if (i > 0)
 					text += ",";
@@ -105,15 +114,43 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 				text += p_values[i].boolean ? "true" : "false";
 			}
 			text += ")";
-			return text;
+			return text.as_string();
 		}
+
+		// GLSL ES 2 doesn't support uints, so we just use signed ints instead...
+		case SL::TYPE_UINT: return itos(p_values[0].uint);
+		case SL::TYPE_UVEC2:
+		case SL::TYPE_UVEC3:
+		case SL::TYPE_UVEC4: {
+
+			StringBuffer text;
+
+			text += "ivec";
+			text += itos(p_type - SL::TYPE_UINT + 1);
+			text += "(";
+
+			for (int i = 0; i < p_values.size(); i++) {
+				if (i > 0)
+					text += ",";
+
+				text += itos(p_values[i].uint);
+			}
+			text += ")";
+			return text.as_string();
+
+		} break;
 
 		case SL::TYPE_INT: return itos(p_values[0].sint);
 		case SL::TYPE_IVEC2:
 		case SL::TYPE_IVEC3:
 		case SL::TYPE_IVEC4: {
 
-			String text = "ivec" + itos(p_type - SL::TYPE_INT + 1) + "(";
+			StringBuffer text;
+
+			text += "ivec";
+			text += itos(p_type - SL::TYPE_INT + 1);
+			text += "(";
+
 			for (int i = 0; i < p_values.size(); i++) {
 				if (i > 0)
 					text += ",";
@@ -121,7 +158,7 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 				text += itos(p_values[i].sint);
 			}
 			text += ")";
-			return text;
+			return text.as_string();
 
 		} break;
 		case SL::TYPE_FLOAT: return f2sp0(p_values[0].real) + "f";
@@ -129,7 +166,12 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 		case SL::TYPE_VEC3:
 		case SL::TYPE_VEC4: {
 
-			String text = "vec" + itos(p_type - SL::TYPE_FLOAT + 1) + "(";
+			StringBuffer text;
+
+			text += "vec";
+			text += itos(p_type - SL::TYPE_FLOAT + 1);
+			text += "(";
+
 			for (int i = 0; i < p_values.size(); i++) {
 				if (i > 0)
 					text += ",";
@@ -137,14 +179,19 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 				text += f2sp0(p_values[i].real);
 			}
 			text += ")";
-			return text;
+			return text.as_string();
 
 		} break;
 		case SL::TYPE_MAT2:
 		case SL::TYPE_MAT3:
 		case SL::TYPE_MAT4: {
 
-			String text = "mat" + itos(p_type - SL::TYPE_MAT2 + 2) + "(";
+			StringBuffer text;
+
+			text += "mat";
+			text += itos(p_type - SL::TYPE_MAT2 + 2);
+			text += "(";
+
 			for (int i = 0; i < p_values.size(); i++) {
 				if (i > 0)
 					text += ",";
@@ -152,7 +199,7 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 				text += f2sp0(p_values[i].real);
 			}
 			text += ")";
-			return text;
+			return text.as_string();
 
 		} break;
 		default: ERR_FAIL_V(String());
@@ -570,6 +617,17 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 				code += _dump_node_code(cf_node->blocks[0], p_level + 1, r_gen_code, p_actions, p_default_actions, p_assigning);
 			} else if (cf_node->flow_op == SL::FLOW_OP_FOR) {
 
+				code += _mktab(p_level);
+				code += "for (";
+				code += _dump_node_code(cf_node->blocks[0], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+				code += "; ";
+				code += _dump_node_code(cf_node->expressions[0], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+				code += "; ";
+				code += _dump_node_code(cf_node->expressions[1], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+				code += ")\n";
+
+				code += _dump_node_code(cf_node->blocks[1], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+
 			} else if (cf_node->flow_op == SL::FLOW_OP_RETURN) {
 				code += _mktab(p_level);
 				code += "return";
@@ -579,6 +637,12 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 					code += _dump_node_code(cf_node->expressions[0], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
 				}
 				code += ";\n";
+			} else if (cf_node->flow_op == SL::FLOW_OP_DISCARD) {
+				code += "discard;";
+			} else if (cf_node->flow_op == SL::FLOW_OP_CONTINUE) {
+				code += "continue;";
+			} else if (cf_node->flow_op == SL::FLOW_OP_BREAK) {
+				code += "break;";
 			}
 		} break;
 
