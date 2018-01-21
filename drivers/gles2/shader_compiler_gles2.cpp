@@ -206,19 +206,25 @@ void ShaderCompilerGLES2::_dump_function_deps(SL::ShaderNode *p_node, const Stri
 			header += _qualstr(fnode->arguments[i].qualifier);
 			header += _prestr(fnode->arguments[i].precision);
 			header += _typestr(fnode->arguments[i].type);
+			header += " ";
 			header += _mkid(fnode->arguments[i].name);
 		}
+
+		header += ")\n";
+		r_to_add += header.as_string();
+		r_to_add += p_func_code[E->get()];
+
+		r_added.insert(E->get());
 	}
 }
 
-String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, GeneratedCode &r_gen_code, IdentifierActions &p_actions, const DefaultIdentifierActions &p_default_actions) {
+String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, GeneratedCode &r_gen_code, IdentifierActions &p_actions, const DefaultIdentifierActions &p_default_actions, bool p_assigning) {
 
 	StringBuilder code;
 
 	switch (p_node->type) {
 
 		case SL::Node::TYPE_SHADER: {
-			print_line("TYPE SHADER");
 
 			SL::ShaderNode *snode = (SL::ShaderNode *)p_node;
 
@@ -309,7 +315,7 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 
 			for (int i = 0; i < snode->functions.size(); i++) {
 				SL::FunctionNode *fnode = snode->functions[i].function;
-				function_code[fnode->name] = _dump_node_code(fnode->body, p_level + 1, r_gen_code, p_actions, p_default_actions);
+				function_code[fnode->name] = _dump_node_code(fnode->body, 1, r_gen_code, p_actions, p_default_actions, p_assigning);
 			}
 
 			Set<StringName> added_vertex;
@@ -321,17 +327,17 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 
 				current_func_name = fnode->name;
 
-				if (fnode->name == "vertex") {
+				if (fnode->name == vertex_name) {
 					_dump_function_deps(snode, fnode->name, function_code, vertex_global, added_vertex);
-					r_gen_code.vertex = function_code["vertex"];
+					r_gen_code.vertex = function_code[vertex_name];
 
-				} else if (fnode->name == "fragment") {
+				} else if (fnode->name == fragment_name) {
 					_dump_function_deps(snode, fnode->name, function_code, fragment_global, added_fragment);
-					r_gen_code.fragment = function_code["fragment"];
+					r_gen_code.fragment = function_code[fragment_name];
 
-				} else if (fnode->name == "light") {
+				} else if (fnode->name == light_name) {
 					_dump_function_deps(snode, fnode->name, function_code, fragment_global, added_fragment);
-					r_gen_code.light = function_code["light"];
+					r_gen_code.light = function_code[light_name];
 				}
 			}
 
@@ -345,10 +351,242 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 		} break;
 
 		case SL::Node::TYPE_BLOCK: {
-			print_line("TYPE BLOCK");
 
 			SL::BlockNode *bnode = (SL::BlockNode *)p_node;
 
+			if (!bnode->single_statement) {
+				code += _mktab(p_level - 1);
+				code += "{\n";
+			}
+
+			for (int i = 0; i < bnode->statements.size(); i++) {
+				String statement_code = _dump_node_code(bnode->statements[i], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+
+				if (bnode->statements[i]->type == SL::Node::TYPE_CONTROL_FLOW || bnode->single_statement) {
+					code += statement_code;
+				} else {
+					code += _mktab(p_level);
+					code += statement_code;
+					code += ";\n";
+				}
+			}
+
+			if (!bnode->single_statement) {
+				code += _mktab(p_level - 1);
+				code += "}\n";
+			}
+		} break;
+
+		case SL::Node::TYPE_VARIABLE_DECLARATION: {
+			SL::VariableDeclarationNode *var_dec_node = (SL::VariableDeclarationNode *)p_node;
+
+			StringBuffer declaration;
+
+			declaration += _prestr(var_dec_node->precision);
+			declaration += _typestr(var_dec_node->datatype);
+
+			for (int i = 0; i < var_dec_node->declarations.size(); i++) {
+
+				if (i > 0) {
+					declaration += ",";
+				}
+
+				declaration += " ";
+
+				declaration += _mkid(var_dec_node->declarations[i].name);
+
+				if (var_dec_node->declarations[i].initializer) {
+					declaration += " = ";
+					declaration += _dump_node_code(var_dec_node->declarations[i].initializer, p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+				}
+			}
+
+			code += declaration.as_string();
+		} break;
+
+		case SL::Node::TYPE_VARIABLE: {
+			SL::VariableNode *var_node = (SL::VariableNode *)p_node;
+
+			if (p_assigning && p_actions.write_flag_pointers.has(var_node->name)) {
+				*p_actions.write_flag_pointers[var_node->name] = true;
+			}
+
+			if (p_default_actions.usage_defines.has(var_node->name) && !used_name_defines.has(var_node->name)) {
+				String define = p_default_actions.usage_defines[var_node->name];
+
+				if (define.begins_with("@")) {
+					define = p_default_actions.usage_defines[define.substr(1, define.length())];
+				}
+
+				r_gen_code.custom_defines.push_back(define.utf8());
+				used_name_defines.insert(var_node->name);
+			}
+
+			if (p_actions.usage_flag_pointers.has(var_node->name) && !used_flag_pointers.has(var_node->name)) {
+				*p_actions.usage_flag_pointers[var_node->name] = true;
+				used_flag_pointers.insert(var_node->name);
+			}
+
+			if (p_default_actions.renames.has(var_node->name)) {
+				code += p_default_actions.renames[var_node->name];
+			} else {
+				code += _mkid(var_node->name);
+			}
+
+			if (var_node->name == time_name) {
+				if (current_func_name == vertex_name) {
+					r_gen_code.uses_vertex_time = true;
+				}
+				if (current_func_name == fragment_name) {
+					r_gen_code.uses_fragment_time = true;
+				}
+			}
+		} break;
+
+		case SL::Node::TYPE_CONSTANT: {
+			SL::ConstantNode *const_node = (SL::ConstantNode *)p_node;
+
+			return get_constant_text(const_node->datatype, const_node->values);
+		} break;
+
+		case SL::Node::TYPE_OPERATOR: {
+			SL::OperatorNode *op_node = (SL::OperatorNode *)p_node;
+
+			switch (op_node->op) {
+				case SL::OP_ASSIGN:
+				case SL::OP_ASSIGN_ADD:
+				case SL::OP_ASSIGN_SUB:
+				case SL::OP_ASSIGN_MUL:
+				case SL::OP_ASSIGN_DIV:
+				case SL::OP_ASSIGN_SHIFT_LEFT:
+				case SL::OP_ASSIGN_SHIFT_RIGHT:
+				case SL::OP_ASSIGN_MOD:
+				case SL::OP_ASSIGN_BIT_AND:
+				case SL::OP_ASSIGN_BIT_OR:
+				case SL::OP_ASSIGN_BIT_XOR: {
+					code += _dump_node_code(op_node->arguments[0], p_level, r_gen_code, p_actions, p_default_actions, true);
+					code += " ";
+					code += _opstr(op_node->op);
+					code += " ";
+					code += _dump_node_code(op_node->arguments[1], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+				} break;
+
+				case SL::OP_BIT_INVERT:
+				case SL::OP_NEGATE:
+				case SL::OP_NOT:
+				case SL::OP_DECREMENT:
+				case SL::OP_INCREMENT: {
+					code += _opstr(op_node->op);
+					code += _dump_node_code(op_node->arguments[0], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+				} break;
+
+				case SL::OP_POST_DECREMENT:
+				case SL::OP_POST_INCREMENT: {
+					code += _dump_node_code(op_node->arguments[0], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+					code += _opstr(op_node->op);
+				} break;
+
+				case SL::OP_CALL:
+				case SL::OP_CONSTRUCT: {
+					ERR_FAIL_COND_V(op_node->arguments[0]->type != SL::Node::TYPE_VARIABLE, String());
+
+					SL::VariableNode *var_node = (SL::VariableNode *)op_node->arguments[0];
+
+					if (op_node->op == SL::OP_CONSTRUCT) {
+						code += var_node->name;
+					} else {
+
+						if (internal_functions.has(var_node->name)) {
+							code += var_node->name;
+						} else if (p_default_actions.renames.has(var_node->name)) {
+							code += p_default_actions.renames[var_node->name];
+						} else {
+							code += _mkid(var_node->name);
+						}
+					}
+
+					code += "(";
+
+					for (int i = 1; i < op_node->arguments.size(); i++) {
+						if (i > 1) {
+							code += ", ";
+						}
+
+						code += _dump_node_code(op_node->arguments[i], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+					}
+
+					code += ")";
+
+				} break;
+
+				case SL::OP_INDEX: {
+					code += _dump_node_code(op_node->arguments[0], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+					code += "[";
+					code += _dump_node_code(op_node->arguments[1], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+					code += "]";
+				} break;
+
+				case SL::OP_SELECT_IF: {
+					code += _dump_node_code(op_node->arguments[0], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+					code += " ? ";
+					code += _dump_node_code(op_node->arguments[1], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+					code += " : ";
+					code += _dump_node_code(op_node->arguments[2], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+				} break;
+
+				default: {
+					code += "(";
+					code += _dump_node_code(op_node->arguments[0], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+					code += " ";
+					code += _opstr(op_node->op);
+					code += " ";
+					code += _dump_node_code(op_node->arguments[1], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+					code += ")";
+				} break;
+			}
+		} break;
+
+		case SL::Node::TYPE_CONTROL_FLOW: {
+			SL::ControlFlowNode *cf_node = (SL::ControlFlowNode *)p_node;
+
+			if (cf_node->flow_op == SL::FLOW_OP_IF) {
+
+				code += _mktab(p_level);
+				code += "if (";
+				code += _dump_node_code(cf_node->expressions[0], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+				code += ")\n";
+				code += _dump_node_code(cf_node->blocks[0], p_level + 1, r_gen_code, p_actions, p_default_actions, p_assigning);
+
+				if (cf_node->blocks.size() == 2) {
+					code += _mktab(p_level);
+					code += "else\n";
+					code += _dump_node_code(cf_node->blocks[1], p_level + 1, r_gen_code, p_actions, p_default_actions, p_assigning);
+				}
+			} else if (cf_node->flow_op == SL::FLOW_OP_WHILE) {
+				code += _mktab(p_level);
+				code += "while (";
+				code += _dump_node_code(cf_node->expressions[0], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+				code += ")\n";
+				code += _dump_node_code(cf_node->blocks[0], p_level + 1, r_gen_code, p_actions, p_default_actions, p_assigning);
+			} else if (cf_node->flow_op == SL::FLOW_OP_FOR) {
+
+			} else if (cf_node->flow_op == SL::FLOW_OP_RETURN) {
+				code += _mktab(p_level);
+				code += "return";
+
+				if (cf_node->expressions.size()) {
+					code += " ";
+					code += _dump_node_code(cf_node->expressions[0], p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+				}
+				code += ";\n";
+			}
+		} break;
+
+		case SL::Node::TYPE_MEMBER: {
+			SL::MemberNode *member_node = (SL::MemberNode *)p_node;
+			code += _dump_node_code(member_node->owner, p_level, r_gen_code, p_actions, p_default_actions, p_assigning);
+			code += ".";
+			code += member_node->name;
 		} break;
 	}
 
@@ -386,7 +624,7 @@ Error ShaderCompilerGLES2::compile(VS::ShaderMode p_mode, const String &p_code, 
 	used_rmode_defines.clear();
 	used_flag_pointers.clear();
 
-	_dump_node_code(parser.get_shader(), 1, r_gen_code, *p_actions, actions[p_mode]);
+	_dump_node_code(parser.get_shader(), 1, r_gen_code, *p_actions, actions[p_mode], false);
 
 	return OK;
 }
@@ -567,6 +805,7 @@ ShaderCompilerGLES2::ShaderCompilerGLES2() {
 
 	vertex_name = "vertex";
 	fragment_name = "fragment";
+	light_name = "light";
 	time_name = "TIME";
 
 	List<String> func_list;

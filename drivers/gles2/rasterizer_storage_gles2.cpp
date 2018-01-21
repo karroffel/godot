@@ -811,17 +811,20 @@ void RasterizerStorageGLES2::_update_shader(Shader *p_shader) const {
 
 	ERR_FAIL_COND(err != OK);
 
-	print_line("-------------------");
+	p_shader->shader->set_custom_shader_code(p_shader->custom_code_id, gen_code.vertex, gen_code.vertex_global, gen_code.fragment, gen_code.light, gen_code.fragment_global, gen_code.uniforms, gen_code.texture_uniforms, gen_code.custom_defines);
 
-	for (int i = 0; i < gen_code.custom_defines.size(); i++) {
-		print_line(gen_code.custom_defines[i].ptr());
+	p_shader->texture_count = gen_code.texture_uniforms.size();
+	p_shader->texture_hints = gen_code.texture_hints;
+
+	p_shader->uses_vertex_time = gen_code.uses_vertex_time;
+	p_shader->uses_fragment_time = gen_code.uses_fragment_time;
+
+	for (SelfList<Material> *E = p_shader->materials.first(); E; E = E->next()) {
+		_material_make_dirty(E->self());
 	}
 
-	print_line(gen_code.fragment_global);
-
-	print_line("-------------------");
-
-	p_shader->shader->set_custom_shader_code(p_shader->custom_code_id, gen_code.vertex, gen_code.vertex_global, gen_code.fragment, gen_code.light, gen_code.fragment_global, gen_code.uniforms, gen_code.texture_uniforms, gen_code.custom_defines);
+	p_shader->valid = true;
+	p_shader->version++;
 }
 
 void RasterizerStorageGLES2::update_dirty_shaders() {
