@@ -86,7 +86,7 @@ void RasterizerCanvasGLES2::canvas_begin() {
 
 	if (storage->frame.current_rt) {
 
-		float csy = -1.0;
+		float csy = 1.0;
 		if (storage->frame.current_rt && storage->frame.current_rt->flags[RasterizerStorage::RENDER_TARGET_VFLIP]) {
 			csy = -1.0;
 		}
@@ -769,10 +769,7 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 
 			if (current_clip) {
 				glEnable(GL_SCISSOR_TEST);
-				glScissor(current_clip->final_clip_rect.position.x,
-						current_clip->final_clip_rect.position.y,
-						current_clip->final_clip_rect.size.width,
-						current_clip->final_clip_rect.size.height);
+				glScissor(current_clip->final_clip_rect.position.x, (rt_size.height - (current_clip->final_clip_rect.position.y + current_clip->final_clip_rect.size.height)), current_clip->final_clip_rect.size.width, current_clip->final_clip_rect.size.height);
 			} else {
 				glDisable(GL_SCISSOR_TEST);
 			}
@@ -914,10 +911,7 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 
 		if (reclip) {
 			glEnable(GL_SCISSOR_TEST);
-			glScissor(current_clip->final_clip_rect.position.x,
-					current_clip->final_clip_rect.position.y,
-					current_clip->final_clip_rect.size.width,
-					current_clip->final_clip_rect.size.height);
+			glScissor(current_clip->final_clip_rect.position.x, (rt_size.height - (current_clip->final_clip_rect.position.y + current_clip->final_clip_rect.size.height)), current_clip->final_clip_rect.size.width, current_clip->final_clip_rect.size.height);
 		}
 
 		p_item_list = p_item_list->next;

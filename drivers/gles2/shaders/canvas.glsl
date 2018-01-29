@@ -58,9 +58,9 @@ void main() {
 	// But it doesn't.
 	// I don't know why, will need to investigate further.
 
-	// outvec.xy = dst_rect.xy + abs(dst_rect.zw) * select(vertex, vec2(1.0, 1.0) - vertex, lessThan(src_rect.zw, vec2(0.0, 0.0)));
+	outvec.xy = dst_rect.xy + abs(dst_rect.zw) * select(vertex, vec2(1.0, 1.0) - vertex, lessThan(src_rect.zw, vec2(0.0, 0.0)));
 
-	outvec.xy = dst_rect.xy + abs(dst_rect.zw) * vertex;
+	// outvec.xy = dst_rect.xy + abs(dst_rect.zw) * vertex;
 #else
 	vec4 outvec = vec4(vertex.xy, 0.0, 1.0);
 
