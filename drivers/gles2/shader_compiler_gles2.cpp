@@ -543,10 +543,19 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 						code += var_node->name;
 					} else {
 
-						if (internal_functions.has(var_node->name)) {
-							code += var_node->name;
+						if (var_node->name == "texture") {
+							// emit texture call
+
+							if (op_node->arguments[1]->get_datatype() == SL::TYPE_SAMPLER2D) {
+								code += "texture2D";
+							} else if (op_node->arguments[1]->get_datatype() == SL::TYPE_SAMPLERCUBE) {
+								code += "textureCube";
+							}
+
 						} else if (p_default_actions.renames.has(var_node->name)) {
 							code += p_default_actions.renames[var_node->name];
+						} else if (internal_functions.has(var_node->name)) {
+							code += var_node->name;
 						} else {
 							code += _mkid(var_node->name);
 						}

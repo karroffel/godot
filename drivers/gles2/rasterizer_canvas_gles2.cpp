@@ -600,6 +600,9 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 				state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_TEXTURE_RECT, false);
 				state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_UV_ATTRIBUTE, false);
 
+				if (state.canvas_shader.bind())
+					_set_uniforms();
+
 				static const int num_points = 32;
 
 				Vector2 points[num_points + 1];
@@ -615,6 +618,7 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 				}
 
 				_bind_canvas_texture(RID(), RID());
+
 				_draw_polygon(indices, num_points * 3, num_points + 1, points, NULL, &circle->color, true);
 			} break;
 
