@@ -437,6 +437,9 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 					}
 				}
 
+				glBindBuffer(GL_ARRAY_BUFFER, 0);
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
 			} break;
 
 			case Item::Command::TYPE_NINEPATCH: {
@@ -609,6 +612,7 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 				points[num_points] = circle->pos;
 
 				int indices[num_points * 3];
+
 
 				for (int i = 0; i < num_points; i++) {
 					points[i] = circle->pos + Vector2(Math::sin(i * Math_PI * 2.0 / num_points), Math::cos(i * Math_PI * 2.0 / num_points)) * circle->radius;
@@ -912,6 +916,8 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 		_set_uniforms();
 
 		_canvas_item_render_commands(p_item_list, NULL, reclip);
+
+		rebind_shader = true; // hacked in for now.
 
 		if (reclip) {
 			glEnable(GL_SCISSOR_TEST);

@@ -315,6 +315,11 @@ void RasterizerGLES2::blit_render_target_to_screen(RID p_render_target, const Re
 	RasterizerStorageGLES2::RenderTarget *rt = storage->render_target_owner.getornull(p_render_target);
 	ERR_FAIL_COND(!rt);
 
+	canvas->state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_TEXTURE_RECT, true);
+	canvas->state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_UV_ATTRIBUTE, false);
+
+	canvas->state.canvas_shader.bind();
+
 	canvas->canvas_begin();
 	canvas->state.canvas_shader.set_uniform(CanvasShaderGLES2::BLIT_PASS, true);
 	glDisable(GL_BLEND);
