@@ -78,7 +78,7 @@ static String _opstr(SL::Operator p_op) {
 
 static String _mkid(const String &p_id) {
 
-	StringBuffer id;
+	StringBuffer<> id;
 	id += "m_";
 	id += p_id;
 
@@ -101,7 +101,7 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 		case SL::TYPE_BVEC3:
 		case SL::TYPE_BVEC4: {
 
-			StringBuffer text;
+			StringBuffer<> text;
 
 			text += "bvec";
 			text += itos(p_type - SL::TYPE_BOOL + 1);
@@ -123,7 +123,7 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 		case SL::TYPE_UVEC3:
 		case SL::TYPE_UVEC4: {
 
-			StringBuffer text;
+			StringBuffer<> text;
 
 			text += "ivec";
 			text += itos(p_type - SL::TYPE_UINT + 1);
@@ -145,7 +145,7 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 		case SL::TYPE_IVEC3:
 		case SL::TYPE_IVEC4: {
 
-			StringBuffer text;
+			StringBuffer<> text;
 
 			text += "ivec";
 			text += itos(p_type - SL::TYPE_INT + 1);
@@ -166,7 +166,7 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 		case SL::TYPE_VEC3:
 		case SL::TYPE_VEC4: {
 
-			StringBuffer text;
+			StringBuffer<> text;
 
 			text += "vec";
 			text += itos(p_type - SL::TYPE_FLOAT + 1);
@@ -186,7 +186,7 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 		case SL::TYPE_MAT3:
 		case SL::TYPE_MAT4: {
 
-			StringBuffer text;
+			StringBuffer<> text;
 
 			text += "mat";
 			text += itos(p_type - SL::TYPE_MAT2 + 2);
@@ -239,7 +239,7 @@ void ShaderCompilerGLES2::_dump_function_deps(SL::ShaderNode *p_node, const Stri
 
 		r_to_add += "\n";
 
-		StringBuffer header;
+		StringBuffer<128> header;
 
 		header += _typestr(fnode->return_type);
 		header += " ";
@@ -314,7 +314,7 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 			// uniforms
 
 			for (Map<StringName, SL::ShaderNode::Uniform>::Element *E = snode->uniforms.front(); E; E = E->next()) {
-				StringBuffer uniform_code;
+				StringBuffer<> uniform_code;
 
 				uniform_code += "uniform ";
 
@@ -341,7 +341,7 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 
 			for (Map<StringName, SL::ShaderNode::Varying>::Element *E = snode->varyings.front(); E; E = E->next()) {
 
-				StringBuffer varying_code;
+				StringBuffer<> varying_code;
 
 				varying_code += "varying ";
 				varying_code += _prestr(E->get().precission);
@@ -427,7 +427,7 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 		case SL::Node::TYPE_VARIABLE_DECLARATION: {
 			SL::VariableDeclarationNode *var_dec_node = (SL::VariableDeclarationNode *)p_node;
 
-			StringBuffer declaration;
+			StringBuffer<> declaration;
 
 			declaration += _prestr(var_dec_node->precision);
 			declaration += _typestr(var_dec_node->datatype);
@@ -484,7 +484,7 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 				if (current_func_name == vertex_name) {
 					r_gen_code.uses_vertex_time = true;
 				}
-				if (current_func_name == fragment_name) {
+				if (current_func_name == fragment_name || current_func_name == light_name) {
 					r_gen_code.uses_fragment_time = true;
 				}
 			}
