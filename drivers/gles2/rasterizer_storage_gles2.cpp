@@ -776,6 +776,8 @@ void RasterizerStorageGLES2::_update_shader(Shader *p_shader) const {
 
 	switch (p_shader->mode) {
 
+			// TODO
+
 		case VS::SHADER_CANVAS_ITEM: {
 
 			p_shader->canvas_item.blend_mode = Shader::CanvasItem::BLEND_MODE_MIX;
@@ -834,13 +836,151 @@ void RasterizerStorageGLES2::update_dirty_shaders() {
 }
 
 void RasterizerStorageGLES2::shader_get_param_list(RID p_shader, List<PropertyInfo> *p_param_list) const {
+
+	Shader *shader = shader_owner.get(p_shader);
+	ERR_FAIL_COND(!shader);
+
+	if (shader->dirty_list.in_list()) {
+		_update_shader(shader);
+	}
+
+	Map<int, StringName> order;
+
+	for (Map<StringName, ShaderLanguage::ShaderNode::Uniform>::Element *E = shader->uniforms.front(); E; E = E->next()) {
+
+		if (E->get().texture_order >= 0) {
+			order[E->get().texture_order + 100000] = E->key();
+		} else {
+			order[E->get().order] = E->key();
+		}
+	}
+
+	for (Map<int, StringName>::Element *E = order.front(); E; E = E->next()) {
+
+		PropertyInfo pi;
+		ShaderLanguage::ShaderNode::Uniform &u = shader->uniforms[E->get()];
+
+		pi.name = E->get();
+
+		switch (u.type) {
+			case ShaderLanguage::TYPE_VOID: {
+				pi.type = Variant::NIL;
+			} break;
+
+			case ShaderLanguage::TYPE_BOOL: {
+				pi.type = Variant::BOOL;
+			} break;
+
+			// bool vectors
+			case ShaderLanguage::TYPE_BVEC2: {
+				pi.type = Variant::INT;
+				pi.hint = PROPERTY_HINT_FLAGS;
+				pi.hint_string = "x,y";
+			} break;
+			case ShaderLanguage::TYPE_BVEC3: {
+				pi.type = Variant::INT;
+				pi.hint = PROPERTY_HINT_FLAGS;
+				pi.hint_string = "x,y,z";
+			} break;
+			case ShaderLanguage::TYPE_BVEC4: {
+				pi.type = Variant::INT;
+				pi.hint = PROPERTY_HINT_FLAGS;
+				pi.hint_string = "x,y,z,w";
+			} break;
+
+				// int stuff
+			case ShaderLanguage::TYPE_UINT:
+			case ShaderLanguage::TYPE_INT: {
+				pi.type = Variant::INT;
+
+				if (u.hint == ShaderLanguage::ShaderNode::Uniform::HINT_RANGE) {
+					pi.hint = PROPERTY_HINT_RANGE;
+					pi.hint_string = rtos(u.hint_range[0]) + "," + rtos(u.hint_range[1]);
+				}
+			} break;
+
+			case ShaderLanguage::TYPE_IVEC2:
+			case ShaderLanguage::TYPE_UVEC2:
+			case ShaderLanguage::TYPE_IVEC3:
+			case ShaderLanguage::TYPE_UVEC3:
+			case ShaderLanguage::TYPE_IVEC4:
+			case ShaderLanguage::TYPE_UVEC4: {
+				pi.type = Variant::POOL_INT_ARRAY;
+			} break;
+
+			case ShaderLanguage::TYPE_VEC2: {
+				pi.type = Variant::VECTOR2;
+			} break;
+			case ShaderLanguage::TYPE_VEC3: {
+				pi.type = Variant::VECTOR3;
+			} break;
+
+			case ShaderLanguage::TYPE_VEC4: {
+				if (u.hint == ShaderLanguage::ShaderNode::Uniform::HINT_COLOR) {
+					pi.type = Variant::COLOR;
+				} else {
+					pi.type = Variant::PLANE;
+				}
+			} break;
+
+			case ShaderLanguage::TYPE_MAT2: {
+				pi.type = Variant::TRANSFORM2D;
+			} break;
+
+			case ShaderLanguage::TYPE_MAT3: {
+				pi.type = Variant::BASIS;
+			} break;
+
+			case ShaderLanguage::TYPE_MAT4: {
+				pi.type = Variant::TRANSFORM;
+			} break;
+
+			case ShaderLanguage::TYPE_SAMPLER2D:
+			case ShaderLanguage::TYPE_ISAMPLER2D:
+			case ShaderLanguage::TYPE_USAMPLER2D: {
+				pi.type = Variant::OBJECT;
+				pi.hint = PROPERTY_HINT_RESOURCE_TYPE;
+				pi.hint_string = "Texture";
+			} break;
+
+			case ShaderLanguage::TYPE_SAMPLERCUBE: {
+				pi.type = Variant::OBJECT;
+				pi.hint = PROPERTY_HINT_RESOURCE_TYPE;
+				pi.hint_string = "CubeMap";
+			} break;
+		}
+
+		p_param_list->push_back(pi);
+	}
 }
 
 void RasterizerStorageGLES2::shader_set_default_texture_param(RID p_shader, const StringName &p_name, RID p_texture) {
+
+	Shader *shader = shader_owner.get(p_shader);
+	ERR_FAIL_COND(!shader);
+	ERR_FAIL_COND(p_texture.is_valid() && !texture_owner.owns(p_texture));
+
+	if (p_texture.is_valid()) {
+		shader->default_textures[p_name] = p_texture;
+	} else {
+		shader->default_textures.erase(p_name);
+	}
+
+	_shader_make_dirty(shader);
 }
 
 RID RasterizerStorageGLES2::shader_get_default_texture_param(RID p_shader, const StringName &p_name) const {
-	return RID();
+
+	const Shader *shader = shader_owner.get(p_shader);
+	ERR_FAIL_COND_V(!shader, RID());
+
+	const Map<StringName, RID>::Element *E = shader->default_textures.find(p_name);
+
+	if (!E) {
+		return RID();
+	}
+
+	return E->get();
 }
 
 /* COMMON MATERIAL API */
@@ -884,13 +1024,40 @@ void RasterizerStorageGLES2::material_set_shader(RID p_material, RID p_shader) {
 }
 
 RID RasterizerStorageGLES2::material_get_shader(RID p_material) const {
+
+	const Material *material = material_owner.get(p_material);
+	ERR_FAIL_COND_V(!material, RID());
+
+	if (material->shader) {
+		return material->shader->self;
+	}
+
 	return RID();
 }
 
 void RasterizerStorageGLES2::material_set_param(RID p_material, const StringName &p_param, const Variant &p_value) {
+
+	Material *material = material_owner.get(p_material);
+	ERR_FAIL_COND(!material);
+
+	if (p_value.get_type() == Variant::NIL) {
+		material->params.erase(p_param);
+	} else {
+		material->params[p_param] = p_value;
+	}
+
+	_material_make_dirty(material);
 }
 
 Variant RasterizerStorageGLES2::material_get_param(RID p_material, const StringName &p_param) const {
+
+	const Material *material = material_owner.get(p_material);
+	ERR_FAIL_COND_V(!material, RID());
+
+	if (material->params.has(p_param)) {
+		return material->params[p_param];
+	}
+
 	return Variant();
 }
 
