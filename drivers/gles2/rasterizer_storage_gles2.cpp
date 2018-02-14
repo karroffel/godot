@@ -742,8 +742,6 @@ void RasterizerStorageGLES2::shader_set_code(RID p_shader, const String &p_code)
 	if (mode == VS::SHADER_CANVAS_ITEM) {
 		shader->shader = &canvas->state.canvas_shader;
 
-		print_line(p_code);
-
 	} else {
 		return;
 	}
@@ -996,8 +994,6 @@ void RasterizerStorageGLES2::_material_make_dirty(Material *p_material) const {
 RID RasterizerStorageGLES2::material_create() {
 
 	Material *material = memnew(Material);
-
-	print_line("create material");
 
 	return material_owner.make_rid(material);
 }
@@ -1769,6 +1765,29 @@ void RasterizerStorageGLES2::_render_target_allocate(RenderTarget *rt) {
 	texture->active = true;
 
 	texture_set_flags(rt->texture, texture->flags);
+
+	// copy texscreen buffers
+	{
+		int w = rt->width;
+		int h = rt->height;
+
+		glGenTextures(1, &rt->copy_screen_effect.color);
+		glBindTexture(GL_TEXTURE_2D, rt->copy_screen_effect.color);
+
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+
+		glGenFramebuffers(1, &rt->copy_screen_effect.fbo);
+		glBindFramebuffer(GL_FRAMEBUFFER, rt->copy_screen_effect.fbo);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rt->color, 0);
+
+		GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+		if (status != GL_FRAMEBUFFER_COMPLETE) {
+			_render_target_clear(rt);
+			ERR_FAIL_COND(status != GL_FRAMEBUFFER_COMPLETE);
+		}
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, RasterizerStorageGLES2::system_fbo);
 }
 
 void RasterizerStorageGLES2::_render_target_clear(RenderTarget *rt) {
@@ -1790,6 +1809,15 @@ void RasterizerStorageGLES2::_render_target_clear(RenderTarget *rt) {
 	tex->width = 0;
 	tex->height = 0;
 	tex->active = false;
+
+	// TODO hardcoded texscreen copy effect
+	if (rt->copy_screen_effect.color) {
+		glDeleteFramebuffers(1, &rt->copy_screen_effect.fbo);
+		rt->copy_screen_effect.fbo = 0;
+
+		glDeleteTextures(1, &rt->copy_screen_effect.color);
+		rt->copy_screen_effect.color = 0;
+	}
 }
 
 RID RasterizerStorageGLES2::render_target_create() {
@@ -1959,6 +1987,11 @@ void RasterizerStorageGLES2::initialize() {
 	frame.current_rt = NULL;
 	frame.clear_request = false;
 	// config.keep_original_textures = false;
+
+	glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &config.max_texture_image_units);
+	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &config.max_texture_size);
+
+	shaders.copy.init();
 
 	{
 		//default textures

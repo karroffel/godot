@@ -81,6 +81,11 @@ int OS_X11::get_video_driver_count() const {
 }
 
 const char *OS_X11::get_video_driver_name(int p_driver) const {
+	String driver_name = GLOBAL_GET("rendering/quality/driver/driver_name");
+
+	if (driver_name == "GLES2") {
+		return "GLES2";
+	}
 	return "GLES3";
 }
 
@@ -283,8 +288,15 @@ Error OS_X11::initialize(const VideoMode &p_desired, int p_video_driver, int p_a
 //print_line("def videomode "+itos(current_videomode.width)+","+itos(current_videomode.height));
 #if defined(OPENGL_ENABLED)
 
-	ContextGL_X11::ContextType opengl_api_type = ContextGL_X11::GLES_2_0_COMPATIBLE;
-	// ContextGL_X11::ContextType opengl_api_type = ContextGL_X11::GLES_3_0_COMPATIBLE;
+	String setting_name = "rendering/quality/driver/driver_name";
+	ProjectSettings::get_singleton()->set_custom_property_info(setting_name, PropertyInfo(Variant::STRING, setting_name, PropertyHint::PROPERTY_HINT_ENUM, "GLES3,GLES2"));
+	String video_driver_name = GLOBAL_DEF("rendering/quality/driver/driver_name", "GLES3");
+
+	ContextGL_X11::ContextType opengl_api_type = ContextGL_X11::GLES_3_0_COMPATIBLE;
+
+	if (video_driver_name == "GLES2") {
+		opengl_api_type = ContextGL_X11::GLES_2_0_COMPATIBLE;
+	}
 
 	context_gl = memnew(ContextGL_X11(x11_display, x11_window, current_videomode, opengl_api_type));
 	context_gl->initialize();

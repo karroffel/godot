@@ -18,6 +18,8 @@ attribute vec2 uv_attrib; // attrib:4
 varying vec2 uv_interp;
 varying vec4 color_interp;
 
+uniform highp vec2 color_texpixel_size;
+
 #ifdef USE_TEXTURE_RECT
 
 uniform vec4 dst_rect;
@@ -95,6 +97,7 @@ precision mediump int;
 #endif
 
 uniform sampler2D color_texture; // texunit:0
+uniform highp vec2 color_texpixel_size;
 uniform mediump sampler2D normal_texture; // texunit:1
 
 varying mediump vec2 uv_interp;
@@ -103,6 +106,18 @@ varying mediump vec4 color_interp;
 uniform bool blit_pass;
 
 uniform vec4 final_modulate;
+
+#ifdef SCREEN_TEXTURE_USED
+
+uniform sampler2D screen_texture; // texunit:2
+
+#endif
+
+#ifdef SCREEN_UV_USED
+
+uniform vec2 screen_pixel_size;
+
+#endif
 
 FRAGMENT_SHADER_GLOBALS
 

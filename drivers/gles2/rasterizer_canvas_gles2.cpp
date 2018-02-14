@@ -426,6 +426,8 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 						dst_rect.size.x *= -1; // Encoding in the dst_rect.z uniform
 					}
 
+					state.canvas_shader.set_uniform(CanvasShaderGLES2::COLOR_TEXPIXEL_SIZE, texpixel_size);
+
 					state.canvas_shader.set_uniform(CanvasShaderGLES2::DST_RECT, Color(dst_rect.position.x, dst_rect.position.y, dst_rect.size.x, dst_rect.size.y));
 					state.canvas_shader.set_uniform(CanvasShaderGLES2::SRC_RECT, Color(src_rect.position.x, src_rect.position.y, src_rect.size.x, src_rect.size.y));
 
@@ -463,7 +465,8 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 
 				Size2 texpixel_size(1.0 / tex->width, 1.0 / tex->height);
 
-				state.canvas_shader.set_uniform(CanvasShaderGLES2::MODELVIEW_MATRIX, state.uniforms.modelview_matrix);
+				// state.canvas_shader.set_uniform(CanvasShaderGLES2::MODELVIEW_MATRIX, state.uniforms.modelview_matrix);
+				state.canvas_shader.set_uniform(CanvasShaderGLES2::COLOR_TEXPIXEL_SIZE, texpixel_size);
 
 				// prepare vertex buffer
 
@@ -639,6 +642,8 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 				RasterizerStorageGLES2::Texture *texture = _bind_canvas_texture(polygon->texture, polygon->normal_map);
 
 				if (texture) {
+					Size2 texpixel_size(1.0 / texture->width, 1.0 / texture->height);
+					state.canvas_shader.set_uniform(CanvasShaderGLES2::COLOR_TEXPIXEL_SIZE, texpixel_size);
 				}
 
 				_draw_polygon(polygon->indices.ptr(), polygon->count, polygon->points.size(), polygon->points.ptr(), polygon->uvs.ptr(), polygon->colors.ptr(), polygon->colors.size() == 1);
@@ -687,13 +692,13 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 				RasterizerStorageGLES2::Texture *texture = _bind_canvas_texture(primitive->texture, primitive->normal_map);
 
 				if (texture) {
-					// TODO texpixel size?
+					Size2 texpixel_size(1.0 / texture->width, 1.0 / texture->height);
+					state.canvas_shader.set_uniform(CanvasShaderGLES2::COLOR_TEXPIXEL_SIZE, texpixel_size);
 				}
 
 				if (primitive->colors.size() == 1 && primitive->points.size() > 1) {
 					Color c = primitive->colors[0];
 					glVertexAttrib4f(VS::ARRAY_COLOR, c.r, c.g, c.b, c.a);
-					glVertexAttrib4f(VS::ARRAY_COLOR, 1, 1, 1, 1);
 				} else if (primitive->colors.empty()) {
 					glVertexAttrib4f(VS::ARRAY_COLOR, 1, 1, 1, 1);
 				}
@@ -744,6 +749,44 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 }
 
 void RasterizerCanvasGLES2::_copy_texscreen(const Rect2 &p_rect) {
+
+	// This isn't really working yet, so disabling for now.
+
+/*
+	glDisable(GL_BLEND);
+
+	state.canvas_texscreen_used = true;
+
+	Vector2 wh(storage->frame.current_rt->width, storage->frame.current_rt->height);
+	Color copy_section(p_rect.position.x / wh.x, p_rect.position.y / wh.y, p_rect.size.x / wh.x, p_rect.size.y / wh.y);
+
+	if (p_rect != Rect2()) {
+		// only use section
+
+		storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_COPY_SECTION, true);
+	}
+
+
+	storage->shaders.copy.bind();
+	storage->shaders.copy.set_uniform(CopyShaderGLES2::COPY_SECTION, copy_section);
+
+	_bind_quad_buffer();
+
+	glBindFramebuffer(GL_FRAMEBUFFER, storage->frame.current_rt->copy_screen_effect.fbo);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, storage->frame.current_rt->color);
+
+	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+	glDisableVertexAttribArray(VS::ARRAY_VERTEX);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, storage->frame.current_rt->fbo);
+
+	state.canvas_shader.bind();
+	_bind_canvas_texture(state.current_tex, state.current_normal);
+
+	glEnable(GL_BLEND);
+*/
 }
 
 void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, const Color &p_modulate, Light *p_light) {
@@ -786,7 +829,11 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 		// TODO: copy back buffer
 
 		if (ci->copy_back_buffer) {
-			print_line("backbuffer copy not implemented yet");
+			if (ci->copy_back_buffer->full) {
+				_copy_texscreen(Rect2());
+			} else {
+				_copy_texscreen(ci->copy_back_buffer->rect);
+			}
 		}
 
 		Item *material_owner = ci->material_owner ? ci->material_owner : ci;
@@ -808,7 +855,7 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 
 			if (shader_ptr) {
 				if (shader_ptr->canvas_item.uses_screen_texture) {
-					print_line("screen texture not implemented yet");
+					_copy_texscreen(Rect2());
 				}
 
 				if (shader_ptr != shader_cache) {
@@ -950,6 +997,15 @@ void RasterizerCanvasGLES2::reset_canvas() {
 		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 	} else {
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	}
+
+	// bind the back buffer to a texture so shaders can use it.
+	// It should probably use texture unit -3 (as GLES3 does as well) but currently that's buggy.
+	// keeping this for now as there's nothing else that uses texture unit 2
+	// TODO ^
+	if (storage->frame.current_rt) {
+		glActiveTexture(GL_TEXTURE0 + 2);
+		glBindTexture(GL_TEXTURE_2D, storage->frame.current_rt->copy_screen_effect.color);
 	}
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);

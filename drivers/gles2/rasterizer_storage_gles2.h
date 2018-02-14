@@ -35,6 +35,8 @@
 #include "servers/visual/shader_language.h"
 #include "shader_compiler_gles2.h"
 #include "shader_gles2.h"
+
+#include "shaders/copy.glsl.gen.h"
 /*
 #include "shaders/blend_shape.glsl.gen.h"
 #include "shaders/canvas.glsl.gen.h"
@@ -95,6 +97,8 @@ public:
 	mutable struct Shaders {
 
 		ShaderCompilerGLES2 compiler;
+
+		CopyShaderGLES2 copy;
 
 		ShaderCompilerGLES2::IdentifierActions actions_canvas;
 		ShaderCompilerGLES2::IdentifierActions actions_scene;
@@ -724,6 +728,25 @@ public:
 		// TODO post processing effects?
 
 		// TODO HDR?
+
+		// TODO this is hardcoded for texscreen copies for now
+
+		struct Effect {
+			GLuint fbo;
+			int width;
+			int height;
+
+			GLuint color;
+
+			Effect() {
+				fbo = 0;
+				width = 0;
+				height = 0;
+				color = 0;
+			}
+		};
+
+		Effect copy_screen_effect;
 
 		int width, height;
 
