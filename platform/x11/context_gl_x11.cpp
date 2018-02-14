@@ -147,8 +147,8 @@ Error ContextGL_X11::initialize() {
 			XSetErrorHandler(&ctxErrorHandler);
 
 	switch (context_type) {
-		case ContextType::GLES_2_0_COMPATIBLE:
-		case ContextType::OLDSTYLE: {
+		case GLES_2_0_COMPATIBLE:
+		case OLDSTYLE: {
 			p->glx_context = glXCreateContext(x11_display, vi, 0, GL_TRUE);
 		} break;
 		/*
@@ -165,7 +165,7 @@ Error ContextGL_X11::initialize() {
 			ERR_FAIL_COND_V(!p->glx_context, ERR_UNCONFIGURED);
 		} break;
 		*/
-		case ContextType::GLES_3_0_COMPATIBLE: {
+		case GLES_3_0_COMPATIBLE: {
 
 			static int context_attribs[] = {
 				GLX_CONTEXT_MAJOR_VERSION_ARB, 3,

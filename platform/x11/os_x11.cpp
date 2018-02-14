@@ -289,7 +289,7 @@ Error OS_X11::initialize(const VideoMode &p_desired, int p_video_driver, int p_a
 #if defined(OPENGL_ENABLED)
 
 	String setting_name = "rendering/quality/driver/driver_name";
-	ProjectSettings::get_singleton()->set_custom_property_info(setting_name, PropertyInfo(Variant::STRING, setting_name, PropertyHint::PROPERTY_HINT_ENUM, "GLES3,GLES2"));
+	ProjectSettings::get_singleton()->set_custom_property_info(setting_name, PropertyInfo(Variant::STRING, setting_name, PROPERTY_HINT_ENUM, "GLES3,GLES2"));
 	String video_driver_name = GLOBAL_DEF("rendering/quality/driver/driver_name", "GLES3");
 
 	ContextGL_X11::ContextType opengl_api_type = ContextGL_X11::GLES_3_0_COMPATIBLE;
@@ -302,11 +302,11 @@ Error OS_X11::initialize(const VideoMode &p_desired, int p_video_driver, int p_a
 	context_gl->initialize();
 
 	switch (opengl_api_type) {
-		case ContextGL_X11::ContextType::GLES_2_0_COMPATIBLE: {
+		case ContextGL_X11::GLES_2_0_COMPATIBLE: {
 			RasterizerGLES2::register_config();
 			RasterizerGLES2::make_current();
 		} break;
-		case ContextGL_X11::ContextType::GLES_3_0_COMPATIBLE: {
+		case ContextGL_X11::GLES_3_0_COMPATIBLE: {
 			RasterizerGLES3::register_config();
 			RasterizerGLES3::make_current();
 		} break;

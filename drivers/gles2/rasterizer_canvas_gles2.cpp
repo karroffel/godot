@@ -616,7 +616,6 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 
 				int indices[num_points * 3];
 
-
 				for (int i = 0; i < num_points; i++) {
 					points[i] = circle->pos + Vector2(Math::sin(i * Math_PI * 2.0 / num_points), Math::cos(i * Math_PI * 2.0 / num_points)) * circle->radius;
 					indices[i * 3 + 0] = i;
@@ -752,7 +751,7 @@ void RasterizerCanvasGLES2::_copy_texscreen(const Rect2 &p_rect) {
 
 	// This isn't really working yet, so disabling for now.
 
-/*
+	/*
 	glDisable(GL_BLEND);
 
 	state.canvas_texscreen_used = true;
@@ -786,7 +785,7 @@ void RasterizerCanvasGLES2::_copy_texscreen(const Rect2 &p_rect) {
 	_bind_canvas_texture(state.current_tex, state.current_normal);
 
 	glEnable(GL_BLEND);
-*/
+	*/
 }
 
 void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, const Color &p_modulate, Light *p_light) {

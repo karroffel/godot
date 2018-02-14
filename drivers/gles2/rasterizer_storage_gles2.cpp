@@ -327,7 +327,7 @@ void RasterizerStorageGLES2::texture_set_data(RID p_texture, const Ref<Image> &p
 	GLenum type;
 	GLenum format;
 	GLenum internal_format;
-	bool compressed;
+	bool compressed = false;
 	bool srgb;
 
 	if (config.keep_original_textures && !(texture->flags & VS::TEXTURE_FLAG_USED_FOR_STREAMING)) {
@@ -1162,6 +1162,7 @@ void RasterizerStorageGLES2::mesh_set_custom_aabb(RID p_mesh, const AABB &p_aabb
 }
 
 AABB RasterizerStorageGLES2::mesh_get_custom_aabb(RID p_mesh) const {
+	return AABB();
 }
 
 AABB RasterizerStorageGLES2::mesh_get_aabb(RID p_mesh, RID p_skeleton) const {
@@ -1469,6 +1470,7 @@ void RasterizerStorageGLES2::gi_probe_set_cell_size(RID p_probe, float p_size) {
 }
 
 float RasterizerStorageGLES2::gi_probe_get_cell_size(RID p_probe) const {
+	return 0.0;
 }
 
 void RasterizerStorageGLES2::gi_probe_set_to_cell_xform(RID p_probe, const Transform &p_xform) {
