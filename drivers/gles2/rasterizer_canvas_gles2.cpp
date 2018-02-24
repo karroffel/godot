@@ -58,6 +58,8 @@ void RasterizerCanvasGLES2::_set_uniforms() {
 
 void RasterizerCanvasGLES2::canvas_begin() {
 
+	state.canvas_shader.bind();
+
 	if (storage->frame.clear_request) {
 		glClearColor(storage->frame.clear_request_color.r,
 				storage->frame.clear_request_color.g,

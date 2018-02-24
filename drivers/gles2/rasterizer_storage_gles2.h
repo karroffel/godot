@@ -143,6 +143,66 @@ public:
 	//////////////////////////////////DATA///////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////////////////////////////////////
 
+	struct Instanciable : public RID_Data {
+		SelfList<RasterizerScene::InstanceBase>::List instance_list;
+
+		_FORCE_INLINE_ void instance_change_notify() {
+			SelfList<RasterizerScene::InstanceBase> *instances = instance_list.first();
+
+			while (instances) {
+				instances->self()->base_changed();
+				instances = instances->next();
+			}
+		}
+
+		_FORCE_INLINE_ void instance_material_change_notify() {
+			SelfList<RasterizerScene::InstanceBase> *instances = instance_list.first();
+
+			while (instances) {
+				instances->self()->base_material_changed();
+				instances = instances->next();
+			}
+		}
+
+		_FORCE_INLINE_ void instance_remove_deps() {
+			SelfList<RasterizerScene::InstanceBase> *instances = instance_list.first();
+
+			while (instances) {
+				instances->self()->base_removed();
+				instances = instances->next();
+			}
+		}
+
+		Instanciable() {}
+
+		virtual ~Instanciable() {}
+	};
+
+	struct GeometryOwner : public Instanciable {
+	};
+
+	struct Geometry : public Instanciable {
+
+		enum Type {
+			GEOMETRY_INVALID,
+			GEOMETRY_SURFACE,
+			GEOMETRY_IMMEDIATE,
+			GEOMETRY_MULTISURFACE
+		};
+
+		Type type;
+		RID material;
+		uint64_t last_pass;
+		uint32_t index;
+
+		virtual void material_changed_notify() {}
+
+		Geometry() {
+			last_pass = 0;
+			index = 0;
+		}
+	};
+
 	/////////////////////////////////////////////////////////////////////////////////////////
 	//////////////////////////////////API////////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////////////////////////////////////
@@ -473,6 +533,106 @@ public:
 	void update_dirty_materials();
 
 	/* MESH API */
+
+	struct Mesh;
+
+	struct Surface : public Geometry {
+
+		struct Attrib {
+			bool enabled;
+			bool integer;
+			GLuint index;
+			GLint size;
+			GLenum type;
+			GLboolean normalized;
+			GLsizei stride;
+			uint32_t offset;
+		};
+
+		Attrib attribs[VS::ARRAY_MAX];
+
+		Mesh *mesh;
+		uint32_t format;
+
+		GLuint vertex_id;
+		GLuint index_id;
+
+		struct BlendShape {
+			GLuint vertex_id;
+			GLuint array_id;
+		};
+
+		Vector<BlendShape> blend_shapes;
+
+		AABB aabb;
+
+		int array_len;
+		int index_array_len;
+		int max_bone;
+
+		int array_byte_size;
+		int index_array_byte_size;
+
+		VS::PrimitiveType primitive;
+
+		Vector<AABB> skeleton_bone_aabb;
+		Vector<bool> skeleton_bone_used;
+
+		bool active;
+
+		int total_data_size;
+
+		Surface() {
+			array_byte_size = 0;
+			index_array_byte_size = 0;
+
+			array_len = 0;
+			index_array_len = 0;
+
+			mesh = NULL;
+
+			primitive = VS::PRIMITIVE_POINTS;
+
+			active = false;
+
+			total_data_size = 0;
+		}
+	};
+
+	struct MultiMesh;
+
+	struct Mesh : public GeometryOwner {
+
+		bool active;
+
+		Vector<Surface *> surfaces;
+
+		int blend_shape_count;
+		VS::BlendShapeMode blend_shape_mode;
+
+		AABB custom_aabb;
+
+		mutable uint64_t last_pass;
+
+		SelfList<MultiMesh>::List multimeshes;
+
+		_FORCE_INLINE_ void update_multimeshes() {
+			SelfList<MultiMesh> *mm = multimeshes.first();
+
+			while (mm) {
+				mm->self()->instance_material_change_notify();
+				mm = mm->next();
+			}
+		}
+
+		Mesh() {
+			blend_shape_mode = VS::BLEND_SHAPE_MODE_NORMALIZED;
+			blend_shape_count = 0;
+		}
+	};
+
+	mutable RID_Owner<Mesh> mesh_owner;
+
 	virtual RID mesh_create();
 
 	virtual void mesh_add_surface(RID p_mesh, uint32_t p_format, VS::PrimitiveType p_primitive, const PoolVector<uint8_t> &p_array, int p_vertex_count, const PoolVector<uint8_t> &p_index_array, int p_index_count, const AABB &p_aabb, const Vector<PoolVector<uint8_t> > &p_blend_shapes = Vector<PoolVector<uint8_t> >(), const Vector<AABB> &p_bone_aabbs = Vector<AABB>());
@@ -511,6 +671,9 @@ public:
 	virtual void mesh_clear(RID p_mesh);
 
 	/* MULTIMESH API */
+
+	struct MultiMesh : public GeometryOwner {
+	};
 
 	virtual RID multimesh_create();
 
