@@ -8,14 +8,17 @@ precision mediump float;
 precision mediump int;
 #endif
 
-attribute highp vec2 vertex; // attrib:0
+attribute highp vec3 vertex; // attrib:0
+
+
+uniform mat4 camera_matrix;
 
 VERTEX_SHADER_GLOBALS
 
 void main() {
 
 
-	vec4 outvec = vec4(vertex.xy, 0.0, 1.0);
+	vec4 outvec = vec4(vertex, 1.0);
 
 {
 

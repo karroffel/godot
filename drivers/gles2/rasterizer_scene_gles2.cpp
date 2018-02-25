@@ -206,28 +206,71 @@ void RasterizerSceneGLES2::gi_probe_instance_set_bounds(RID p_probe, const Vecto
 ////////////////////////////
 ////////////////////////////
 
+static const GLenum gl_primitive[] = {
+	GL_POINTS,
+	GL_LINES,
+	GL_LINE_STRIP,
+	GL_LINE_LOOP,
+	GL_TRIANGLES,
+	GL_TRIANGLE_STRIP,
+	GL_TRIANGLE_FAN
+};
+
 void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const CameraMatrix &p_cam_projection, bool p_cam_ortogonal, InstanceBase **p_cull_result, int p_cull_count, RID *p_light_cull_result, int p_light_cull_count, RID *p_reflection_probe_cull_result, int p_reflection_probe_cull_count, RID p_environment, RID p_shadow_atlas, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass) {
 	GLuint current_fb = storage->frame.current_rt->fbo;
 
 	glBindFramebuffer(GL_FRAMEBUFFER, current_fb);
 
-	glClearColor(1.0, 0.0, 0.0, 1.0);
-	glClear(GL_COLOR_BUFFER_BIT);
-
-	storage->canvas->_bind_quad_buffer();
+	// glClear(GL_COLOR_BUFFER_BIT);
 
 	state.scene_shader.bind();
 
 	state.scene_shader.set_uniform(SceneShaderGLES2::COLOR, Color(1, 1, 1));
-
-	glDrawArrays(GL_TRIANGLES, 0, 3);
 
 	storage->frame.clear_request = false;
 
 	for (int i = 0; i < p_cull_count; i++) {
 		InstanceBase *ib = p_cull_result[i];
 
-		print_line("WHEEEEY");
+		switch (ib->base_type) {
+			case VisualServer::InstanceType::INSTANCE_MESH: {
+				RasterizerStorageGLES2::Mesh *m = storage->mesh_owner.getornull(ib->base);
+				ERR_CONTINUE(!m);
+
+				RasterizerStorageGLES2::Surface **s = m->surfaces.ptrw();
+
+				for (int j = 0; j < m->surfaces.size(); j++) {
+					RasterizerStorageGLES2::Surface *surface = s[j];
+
+					// set up attribs
+					for (int a = 0; a < VS::ARRAY_MAX; a++) {
+						if (!surface->attribs[a].enabled) {
+							glDisableVertexAttribArray(a);
+							continue;
+						}
+						RasterizerStorageGLES2::Surface::Attrib *attrib = &surface->attribs[a];
+						
+						glEnableVertexAttribArray(a);
+						glVertexAttribPointer(a, attrib->size, attrib->type, attrib->normalized, attrib->stride, ((uint32_t*) 0) + attrib->offset);
+					}
+
+					glBindBuffer(GL_ARRAY_BUFFER, surface->vertex_id);
+
+					if (surface->index_array_len > 0) {
+						print_line("indexed draw");
+						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, surface->index_id);
+
+						glDrawElements(gl_primitive[surface->primitive], surface->index_array_len, (surface->array_len >= (1 << 16)) ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT, 0);
+					} else {
+						glDrawArrays(gl_primitive[surface->primitive], 0, surface->array_len);
+					}
+				}
+			} break;
+
+			default: {
+				print_line("something else");
+			} break;
+		}
 	}
 
 	/*
