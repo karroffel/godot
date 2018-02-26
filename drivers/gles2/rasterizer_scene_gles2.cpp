@@ -167,7 +167,7 @@ bool RasterizerSceneGLES2::is_environment(RID p_env) {
 }
 
 VS::EnvironmentBG RasterizerSceneGLES2::environment_get_background(RID p_env) {
-	return VS::EnvironmentBG::ENV_BG_CLEAR_COLOR;
+	return VS::ENV_BG_CLEAR_COLOR;
 }
 
 int RasterizerSceneGLES2::environment_get_canvas_max_layer(RID p_env) {

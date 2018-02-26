@@ -1103,7 +1103,7 @@ void RasterizerStorageGLES2::mesh_set_blend_shape_mode(RID p_mesh, VS::BlendShap
 }
 
 VS::BlendShapeMode RasterizerStorageGLES2::mesh_get_blend_shape_mode(RID p_mesh) const {
-	return VS::BlendShapeMode::BLEND_SHAPE_MODE_NORMALIZED;
+	return VS::BLEND_SHAPE_MODE_NORMALIZED;
 }
 
 void RasterizerStorageGLES2::mesh_surface_update_region(RID p_mesh, int p_surface, int p_offset, const PoolVector<uint8_t> &p_data) {
@@ -1137,7 +1137,7 @@ uint32_t RasterizerStorageGLES2::mesh_surface_get_format(RID p_mesh, int p_surfa
 }
 
 VS::PrimitiveType RasterizerStorageGLES2::mesh_surface_get_primitive_type(RID p_mesh, int p_surface) const {
-	return VS::PrimitiveType::PRIMITIVE_TRIANGLES;
+	return VS::PRIMITIVE_TRIANGLES;
 }
 
 AABB RasterizerStorageGLES2::mesh_surface_get_aabb(RID p_mesh, int p_surface) const {
@@ -1334,7 +1334,7 @@ void RasterizerStorageGLES2::light_omni_set_shadow_mode(RID p_light, VS::LightOm
 }
 
 VS::LightOmniShadowMode RasterizerStorageGLES2::light_omni_get_shadow_mode(RID p_light) {
-	return VS::LightOmniShadowMode::LIGHT_OMNI_SHADOW_DUAL_PARABOLOID;
+	return VS::LIGHT_OMNI_SHADOW_DUAL_PARABOLOID;
 }
 
 void RasterizerStorageGLES2::light_omni_set_shadow_detail(RID p_light, VS::LightOmniShadowDetail p_detail) {
@@ -1351,14 +1351,14 @@ bool RasterizerStorageGLES2::light_directional_get_blend_splits(RID p_light) con
 }
 
 VS::LightDirectionalShadowMode RasterizerStorageGLES2::light_directional_get_shadow_mode(RID p_light) {
-	return VS::LightDirectionalShadowMode::LIGHT_DIRECTIONAL_SHADOW_ORTHOGONAL;
+	return VS::LIGHT_DIRECTIONAL_SHADOW_ORTHOGONAL;
 }
 
 void RasterizerStorageGLES2::light_directional_set_shadow_depth_range_mode(RID p_light, VS::LightDirectionalShadowDepthRangeMode p_range_mode) {
 }
 
 VS::LightDirectionalShadowDepthRangeMode RasterizerStorageGLES2::light_directional_get_shadow_depth_range_mode(RID p_light) const {
-	return VS::LightDirectionalShadowDepthRangeMode::LIGHT_DIRECTIONAL_SHADOW_DEPTH_RANGE_STABLE;
+	return VS::LIGHT_DIRECTIONAL_SHADOW_DEPTH_RANGE_STABLE;
 }
 
 VS::LightType RasterizerStorageGLES2::light_get_type(RID p_light) const {
@@ -1972,14 +1972,10 @@ void RasterizerStorageGLES2::initialize() {
 	RasterizerStorageGLES2::system_fbo = 0;
 
 	{
-
-		int max_extensions = 0;
-		glGetIntegerv(GL_NUM_EXTENSIONS, &max_extensions);
-		for (int i = 0; i < max_extensions; i++) {
-			const GLubyte *s = glGetStringi(GL_EXTENSIONS, i);
-			if (!s)
-				break;
-			config.extensions.insert((const char *)s);
+		const char *gl_extensions = (const char *)glGetString(GL_EXTENSIONS);
+		Vector<String> strings = String(gl_extensions).split(" ", false);
+		for (int i = 0; i < strings.size(); i++) {
+			config.extensions.insert(strings[i]);
 		}
 	}
 

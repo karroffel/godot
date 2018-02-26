@@ -247,11 +247,13 @@ ShaderGLES2::Version *ShaderGLES2::get_current_version() {
 
 	Vector<const char *> strings;
 
-	strings.push_back("#version 120\n");
-
 #ifdef GLES_OVER_GL
+	strings.push_back("#version 120\n");
 	strings.push_back("#define USE_GLES_OVER_GL\n");
+#else
+	strings.push_back("#version 100\n");
 #endif
+
 
 	int define_line_ofs = 1;
 

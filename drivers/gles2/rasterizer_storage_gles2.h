@@ -772,7 +772,7 @@ public:
 
 			used_in_frame = false;
 
-			msaa = VS::ViewportMSAA::VIEWPORT_MSAA_DISABLED;
+			msaa = VS::VIEWPORT_MSAA_DISABLED;
 		}
 	};
 
