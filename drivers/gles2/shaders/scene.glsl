@@ -10,8 +10,9 @@ precision mediump int;
 
 attribute highp vec3 vertex; // attrib:0
 
-
-uniform mat4 camera_matrix;
+uniform mat4 model_matrix;
+uniform mat4 camera_transform;
+uniform mat4 projection_matrix;
 
 VERTEX_SHADER_GLOBALS
 
@@ -26,7 +27,7 @@ VERTEX_SHADER_CODE
 
 }
 
-	gl_Position = outvec;
+	gl_Position = projection_matrix * camera_transform * model_matrix * outvec;
 
 }
 

@@ -2215,6 +2215,8 @@ void RasterizerStorageGLES2::_render_target_allocate(RenderTarget *rt) {
 
 	texture_set_flags(rt->texture, texture->flags);
 
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 	// copy texscreen buffers
 	{
 		int w = rt->width;

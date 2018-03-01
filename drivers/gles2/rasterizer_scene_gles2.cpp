@@ -227,6 +227,8 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 
 	state.scene_shader.set_uniform(SceneShaderGLES2::COLOR, Color(1, 1, 1));
 
+	state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_TRANSFORM, p_cam_transform);
+	state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_MATRIX, p_cam_projection);
 	storage->frame.clear_request = false;
 
 	for (int i = 0; i < p_cull_count; i++) {
@@ -238,6 +240,8 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 				ERR_CONTINUE(!m);
 
 				RasterizerStorageGLES2::Surface **s = m->surfaces.ptrw();
+
+				state.scene_shader.set_uniform(SceneShaderGLES2::MODEL_MATRIX, ib->transform);
 
 				for (int j = 0; j < m->surfaces.size(); j++) {
 					RasterizerStorageGLES2::Surface *surface = s[j];
@@ -255,6 +259,7 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 					}
 
 					glBindBuffer(GL_ARRAY_BUFFER, surface->vertex_id);
+
 
 					if (surface->index_array_len > 0) {
 						print_line("indexed draw");
