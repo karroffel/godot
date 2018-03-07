@@ -9,16 +9,20 @@ precision mediump int;
 #endif
 
 attribute highp vec3 vertex; // attrib:0
+attribute vec4 color_attrib; // attrib:3
 
 uniform mat4 model_matrix;
 uniform mat4 camera_transform;
 uniform mat4 projection_matrix;
 
+
+varying vec4 color_interp;
+
 VERTEX_SHADER_GLOBALS
 
 void main() {
 
-
+	color_interp = color_attrib;
 	vec4 outvec = vec4(vertex, 1.0);
 
 {
@@ -43,6 +47,7 @@ precision mediump int;
 
 uniform vec4 color;
 
+varying vec4 color_interp;
 
 FRAGMENT_SHADER_GLOBALS
 
@@ -56,6 +61,6 @@ FRAGMENT_SHADER_CODE
 
 }
 
-	gl_FragColor = color;
+	gl_FragColor = color * color_interp;
 
 }

@@ -1106,18 +1106,21 @@ RID RasterizerStorageGLES2::mesh_create() {
 }
 
 void RasterizerStorageGLES2::mesh_add_surface(RID p_mesh, uint32_t p_format, VS::PrimitiveType p_primitive, const PoolVector<uint8_t> &p_array, int p_vertex_count, const PoolVector<uint8_t> &p_index_array, int p_index_count, const AABB &p_aabb, const Vector<PoolVector<uint8_t> > &p_blend_shapes, const Vector<AABB> &p_bone_aabbs) {
-
 	PoolVector<uint8_t> array = p_array;
 
-	Mesh *mesh = mesh_owner.getptr(p_mesh);
+	Mesh *mesh = mesh_owner.getornull(p_mesh);
 	ERR_FAIL_COND(!mesh);
+
 	ERR_FAIL_COND(!(p_format & VS::ARRAY_FORMAT_VERTEX));
 
+	//must have index and bones, both.
 	{
 		uint32_t bones_weight = VS::ARRAY_FORMAT_BONES | VS::ARRAY_FORMAT_WEIGHTS;
-		ERR_EXPLAIN("Array must have either both bones and weights in format or none.");
-		ERR_FAIL_COND((p_format & bones_weight) && ((p_format & bones_weight) != bones_weight));
+		ERR_EXPLAIN("Array must have both bones and weights in format or none.");
+		ERR_FAIL_COND((p_format & bones_weight) && (p_format & bones_weight) != bones_weight);
 	}
+
+	//bool has_morph = p_blend_shapes.size();
 
 	Surface::Attrib attribs[VS::ARRAY_MAX];
 
@@ -1286,17 +1289,41 @@ void RasterizerStorageGLES2::mesh_add_surface(RID p_mesh, uint32_t p_format, VS:
 		attribs[i].stride = stride;
 	}
 
-	// validate sizes
+	//validate sizes
 
 	int array_size = stride * p_vertex_count;
 	int index_array_size = 0;
+	if (array.size() != array_size && array.size() + p_vertex_count * 2 == array_size) {
+		//old format, convert
+		array = PoolVector<uint8_t>();
 
-	// TODO support old format
+		array.resize(p_array.size() + p_vertex_count * 2);
+
+		PoolVector<uint8_t>::Write w = array.write();
+		PoolVector<uint8_t>::Read r = p_array.read();
+
+		uint16_t *w16 = (uint16_t *)w.ptr();
+		const uint16_t *r16 = (uint16_t *)r.ptr();
+
+		uint16_t one = Math::make_half_float(1);
+
+		for (int i = 0; i < p_vertex_count; i++) {
+
+			*w16++ = *r16++;
+			*w16++ = *r16++;
+			*w16++ = *r16++;
+			*w16++ = one;
+			for (int j = 0; j < (stride / 2) - 4; j++) {
+				*w16++ = *r16++;
+			}
+		}
+	}
 
 	ERR_FAIL_COND(array.size() != array_size);
 
 	if (p_format & VS::ARRAY_FORMAT_INDEX) {
-		index_array_size = attribs[VS::ARRAY_INDEX].size * p_index_count;
+
+		index_array_size = attribs[VS::ARRAY_INDEX].stride * p_index_count;
 	}
 
 	ERR_FAIL_COND(p_index_array.size() != index_array_size);

@@ -221,15 +221,17 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 
 	glBindFramebuffer(GL_FRAMEBUFFER, current_fb);
 
-	// glClear(GL_COLOR_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT);
 
 	state.scene_shader.bind();
 
 	state.scene_shader.set_uniform(SceneShaderGLES2::COLOR, Color(1, 1, 1));
 
-	state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_TRANSFORM, p_cam_transform);
+	state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_TRANSFORM, p_cam_transform.inverse());
 	state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_MATRIX, p_cam_projection);
 	storage->frame.clear_request = false;
+
+	glVertexAttrib4f(VS::ARRAY_COLOR, 1, 1, 1, 1);
 
 	for (int i = 0; i < p_cull_count; i++) {
 		InstanceBase *ib = p_cull_result[i];
@@ -253,21 +255,30 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 							continue;
 						}
 						RasterizerStorageGLES2::Surface::Attrib *attrib = &surface->attribs[a];
-						
+
 						glEnableVertexAttribArray(a);
-						glVertexAttribPointer(a, attrib->size, attrib->type, attrib->normalized, attrib->stride, ((uint32_t*) 0) + attrib->offset);
+						glVertexAttribPointer(a, attrib->size, attrib->type, attrib->normalized, attrib->stride, ((uint32_t *)0) + attrib->offset);
 					}
 
 					glBindBuffer(GL_ARRAY_BUFFER, surface->vertex_id);
-
 
 					if (surface->index_array_len > 0) {
 						print_line("indexed draw");
 						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, surface->index_id);
 
 						glDrawElements(gl_primitive[surface->primitive], surface->index_array_len, (surface->array_len >= (1 << 16)) ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT, 0);
+						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 					} else {
+
 						glDrawArrays(gl_primitive[surface->primitive], 0, surface->array_len);
+					}
+
+					// glBindBuffer(GL_ARRAY_BUFFER, 0);
+					for (int a = 0; a < VS::ARRAY_MAX; a++) {
+						if (surface->attribs[a].enabled) {
+							glDisableVertexAttribArray(a);
+							continue;
+						}
 					}
 				}
 			} break;
