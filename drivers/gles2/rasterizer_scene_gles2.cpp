@@ -248,8 +248,10 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 				for (int j = 0; j < m->surfaces.size(); j++) {
 					RasterizerStorageGLES2::Surface *surface = s[j];
 
+					glBindBuffer(GL_ARRAY_BUFFER, surface->vertex_id);
+
 					// set up attribs
-					for (int a = 0; a < VS::ARRAY_MAX; a++) {
+					for (int a = 0; a < VS::ARRAY_MAX - 1; a++) {
 						if (!surface->attribs[a].enabled) {
 							glDisableVertexAttribArray(a);
 							continue;
@@ -259,8 +261,6 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 						glEnableVertexAttribArray(a);
 						glVertexAttribPointer(a, attrib->size, attrib->type, attrib->normalized, attrib->stride, ((uint32_t *)0) + attrib->offset);
 					}
-
-					glBindBuffer(GL_ARRAY_BUFFER, surface->vertex_id);
 
 					if (surface->index_array_len > 0) {
 						print_line("indexed draw");
@@ -273,13 +273,14 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 						glDrawArrays(gl_primitive[surface->primitive], 0, surface->array_len);
 					}
 
-					// glBindBuffer(GL_ARRAY_BUFFER, 0);
-					for (int a = 0; a < VS::ARRAY_MAX; a++) {
+					for (int a = 0; a < VS::ARRAY_MAX - 1; a++) {
 						if (surface->attribs[a].enabled) {
 							glDisableVertexAttribArray(a);
 							continue;
 						}
 					}
+
+					glBindBuffer(GL_ARRAY_BUFFER, 0);
 				}
 			} break;
 
