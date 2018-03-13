@@ -248,6 +248,8 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 				for (int j = 0; j < m->surfaces.size(); j++) {
 					RasterizerStorageGLES2::Surface *surface = s[j];
 
+					RasterizerStorageGLES2::Material *mat = storage->material_owner.getornull(surface->material);
+
 					glBindBuffer(GL_ARRAY_BUFFER, surface->vertex_id);
 
 					// set up attribs

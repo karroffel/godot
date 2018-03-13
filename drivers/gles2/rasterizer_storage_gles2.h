@@ -508,6 +508,7 @@ public:
 
 	mutable SelfList<Material>::List _material_dirty_list;
 	void _material_make_dirty(Material *p_material) const;
+	void _update_material(Material *p_material);
 
 	mutable RID_Owner<Material> material_owner;
 

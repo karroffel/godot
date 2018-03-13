@@ -32,6 +32,8 @@
 #include "rasterizer_canvas_gles2.h"
 #include "rasterizer_scene_gles2.h"
 
+#include "servers/visual/shader_language.h"
+
 GLuint RasterizerStorageGLES2::system_fbo = 0;
 
 /* TEXTURE API */
@@ -919,6 +921,10 @@ void RasterizerStorageGLES2::shader_get_param_list(RID p_shader, List<PropertyIn
 				pi.type = Variant::POOL_INT_ARRAY;
 			} break;
 
+			case ShaderLanguage::TYPE_FLOAT: {
+				pi.type = Variant::REAL;
+			} break;
+
 			case ShaderLanguage::TYPE_VEC2: {
 				pi.type = Variant::VECTOR2;
 			} break;
@@ -1093,7 +1099,35 @@ void RasterizerStorageGLES2::material_remove_instance_owner(RID p_material, Rast
 void RasterizerStorageGLES2::material_set_render_priority(RID p_material, int priority) {
 }
 
+void RasterizerStorageGLES2::_update_material(Material *p_material) {
+	if (p_material->dirty_list.in_list()) {
+		_material_dirty_list.remove(&p_material->dirty_list);
+	}
+
+	if (p_material->shader && p_material->shader->dirty_list.in_list()) {
+		_update_shader(p_material->shader);
+	}
+
+	if (p_material->shader && !p_material->shader->valid) {
+		return;
+	}
+
+	if (p_material->shader) {
+
+		ShaderGLES2 *shader = p_material->shader->shader;
+
+		for (Map<StringName, Variant>::Element *E = p_material->params.front(); E; E = E->next()) {
+			shader->set_uniform(E->key(), E->get());
+		}
+	}
+}
+
 void RasterizerStorageGLES2::update_dirty_materials() {
+	while (_material_dirty_list.first()) {
+
+		Material *material = _material_dirty_list.first()->self();
+		_update_material(material);
+	}
 }
 
 /* MESH API */

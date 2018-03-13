@@ -83,7 +83,14 @@ void ShaderGLES2::bind_uniforms() {
 			continue;
 		}
 
-		const Variant &v = E->value();
+		Variant v;
+
+		if (uniform_values.has(location)) {
+			v = uniform_values[location];
+		} else {
+			v = E->value();
+		}
+
 		_set_uniform_variant(location, v);
 		E = E->next();
 	}
@@ -127,6 +134,8 @@ bool ShaderGLES2::bind() {
 	ERR_FAIL_COND_V(!version, false);
 
 	glUseProgram(version->id);
+
+	bind_uniforms();
 
 	DEBUG_TEST_ERROR("use program");
 

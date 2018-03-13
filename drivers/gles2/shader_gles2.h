@@ -169,6 +169,47 @@ private:
 
 	int max_image_units;
 
+	Map<uint32_t, Variant> uniform_defaults;
+	Map<uint32_t, CameraMatrix> uniform_cameras;
+
+	Map<uint32_t, Variant> uniform_values;
+
+protected:
+	_FORCE_INLINE_ int _get_uniform(int p_which) const;
+	_FORCE_INLINE_ void _set_conditional(int p_which, bool p_value);
+
+	void setup(const char **p_conditional_defines,
+			int p_conditional_count,
+			const char **p_uniform_names,
+			int p_uniform_count,
+			const AttributePair *p_attribute_pairs,
+			int p_attribute_count,
+			const TexUnitPair *p_texunit_pairs,
+			int p_texunit_pair_count,
+			const char *p_vertex_code,
+			const char *p_fragment_code,
+			int p_vertex_code_start,
+			int p_fragment_code_start);
+
+	ShaderGLES2();
+
+public:
+	enum {
+		CUSTOM_SHADER_DISABLED = 0
+	};
+
+	GLint get_uniform_location(const String &p_name) const;
+	GLint get_uniform_location(int p_index) const;
+
+	static _FORCE_INLINE_ ShaderGLES2 *get_active() { return active; }
+	bool bind();
+	void unbind();
+	void bind_uniforms();
+
+	inline GLuint get_program() const { return version ? version->id : 0; }
+
+	void clear_caches();
+
 	_FORCE_INLINE_ void _set_uniform_variant(GLint p_uniform, const Variant &p_value) {
 
 		if (p_uniform < 0)
@@ -266,45 +307,6 @@ private:
 		}
 	}
 
-	Map<uint32_t, Variant> uniform_defaults;
-	Map<uint32_t, CameraMatrix> uniform_cameras;
-
-protected:
-	_FORCE_INLINE_ int _get_uniform(int p_which) const;
-	_FORCE_INLINE_ void _set_conditional(int p_which, bool p_value);
-
-	void setup(const char **p_conditional_defines,
-			int p_conditional_count,
-			const char **p_uniform_names,
-			int p_uniform_count,
-			const AttributePair *p_attribute_pairs,
-			int p_attribute_count,
-			const TexUnitPair *p_texunit_pairs,
-			int p_texunit_pair_count,
-			const char *p_vertex_code,
-			const char *p_fragment_code,
-			int p_vertex_code_start,
-			int p_fragment_code_start);
-
-	ShaderGLES2();
-
-public:
-	enum {
-		CUSTOM_SHADER_DISABLED = 0
-	};
-
-	GLint get_uniform_location(const String &p_name) const;
-	GLint get_uniform_location(int p_index) const;
-
-	static _FORCE_INLINE_ ShaderGLES2 *get_active() { return active; }
-	bool bind();
-	void unbind();
-	void bind_uniforms();
-
-	inline GLuint get_program() const { return version ? version->id : 0; }
-
-	void clear_caches();
-
 	uint32_t create_custom_shader();
 	void set_custom_shader_code(uint32_t p_code_id,
 			const String &p_vertex,
@@ -328,6 +330,15 @@ public:
 
 			uniform_defaults[p_idx] = p_value;
 		}
+		uniforms_dirty = true;
+	}
+
+	void set_uniform(const StringName &p_name, const Variant &p_value) {
+
+		GLuint loc = get_uniform_location(p_name);
+
+		uniform_values[loc] = p_value;
+
 		uniforms_dirty = true;
 	}
 
