@@ -479,7 +479,7 @@ public:
 		Map<StringName, Variant> params;
 		SelfList<Material> list;
 		SelfList<Material> dirty_list;
-		Vector<RID> textures;
+		Vector<Pair<StringName, RID> > textures;
 		float line_width;
 		int render_priority;
 

@@ -882,7 +882,7 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 				}
 
 				int tc = material_ptr->textures.size();
-				RID *textures = material_ptr->textures.ptrw();
+				Pair<StringName, RID> *textures = material_ptr->textures.ptrw();
 
 				ShaderLanguage::ShaderNode::Uniform::Hint *texture_hints = shader_ptr->texture_hints.ptrw();
 
@@ -890,7 +890,7 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 
 					glActiveTexture(GL_TEXTURE2 + i);
 
-					RasterizerStorageGLES2::Texture *t = storage->texture_owner.getornull(textures[i]);
+					RasterizerStorageGLES2::Texture *t = storage->texture_owner.getornull(textures[i].second);
 
 					if (!t) {
 
@@ -920,6 +920,13 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 					}
 
 					glBindTexture(t->target, t->tex_id);
+
+					Pair<ShaderLanguage::DataType, Vector<ShaderLanguage::ConstantNode::Value> > value;
+					value.first = ShaderLanguage::TYPE_INT;
+					value.second.resize(1);
+					value.second[0].sint = 2 + i;
+
+					state.canvas_shader.set_uniform_with_name(material_ptr->textures[i].first, value);
 				}
 			} else {
 				state.canvas_shader.set_custom_shader(0);

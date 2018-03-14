@@ -44,6 +44,9 @@
 #include "map.h"
 #include "variant.h"
 
+#include "core/pair.h"
+#include "servers/visual/shader_language.h"
+
 class ShaderGLES2 {
 protected:
 	struct Enum {
@@ -172,7 +175,7 @@ private:
 	Map<uint32_t, Variant> uniform_defaults;
 	Map<uint32_t, CameraMatrix> uniform_cameras;
 
-	Map<uint32_t, Variant> uniform_values;
+	Map<StringName, Pair<ShaderLanguage::DataType, Vector<ShaderLanguage::ConstantNode::Value> > > uniform_values;
 
 protected:
 	_FORCE_INLINE_ int _get_uniform(int p_which) const;
@@ -209,6 +212,127 @@ public:
 	inline GLuint get_program() const { return version ? version->id : 0; }
 
 	void clear_caches();
+
+	_FORCE_INLINE_ void _set_uniform_value(GLint p_uniform, const Pair<ShaderLanguage::DataType, Vector<ShaderLanguage::ConstantNode::Value> > &value) {
+		if (p_uniform < 0)
+			return;
+
+		const Vector<ShaderLanguage::ConstantNode::Value> &values = value.second;
+
+		switch (value.first) {
+			case ShaderLanguage::TYPE_BOOL: {
+				glUniform1i(p_uniform, values[0].boolean);
+			} break;
+
+			case ShaderLanguage::TYPE_BVEC2: {
+				glUniform2i(p_uniform, values[0].boolean, values[1].boolean);
+			} break;
+
+			case ShaderLanguage::TYPE_BVEC3: {
+				glUniform3i(p_uniform, values[0].boolean, values[1].boolean, values[2].boolean);
+			} break;
+
+			case ShaderLanguage::TYPE_BVEC4: {
+				glUniform4i(p_uniform, values[0].boolean, values[1].boolean, values[2].boolean, values[3].boolean);
+			} break;
+
+			case ShaderLanguage::TYPE_INT: {
+				glUniform1i(p_uniform, values[0].sint);
+			} break;
+
+			case ShaderLanguage::TYPE_IVEC2: {
+				glUniform2i(p_uniform, values[0].sint, values[1].sint);
+			} break;
+
+			case ShaderLanguage::TYPE_IVEC3: {
+				glUniform3i(p_uniform, values[0].sint, values[1].sint, values[2].sint);
+			} break;
+
+			case ShaderLanguage::TYPE_IVEC4: {
+				glUniform4i(p_uniform, values[0].sint, values[1].sint, values[2].sint, values[3].sint);
+			} break;
+
+			case ShaderLanguage::TYPE_UINT: {
+				glUniform1i(p_uniform, values[0].uint);
+			} break;
+
+			case ShaderLanguage::TYPE_UVEC2: {
+				glUniform2i(p_uniform, values[0].uint, values[1].uint);
+			} break;
+
+			case ShaderLanguage::TYPE_UVEC3: {
+				glUniform3i(p_uniform, values[0].uint, values[1].uint, values[2].uint);
+			} break;
+
+			case ShaderLanguage::TYPE_UVEC4: {
+				glUniform4i(p_uniform, values[0].uint, values[1].uint, values[2].uint, values[3].uint);
+			} break;
+
+			case ShaderLanguage::TYPE_FLOAT: {
+				glUniform1f(p_uniform, values[0].real);
+			} break;
+
+			case ShaderLanguage::TYPE_VEC2: {
+				glUniform2f(p_uniform, values[0].real, values[1].real);
+			} break;
+
+			case ShaderLanguage::TYPE_VEC3: {
+				glUniform3f(p_uniform, values[0].real, values[1].real, values[2].real);
+			} break;
+
+			case ShaderLanguage::TYPE_VEC4: {
+				glUniform4f(p_uniform, values[0].real, values[1].real, values[2].real, values[3].real);
+			} break;
+
+			case ShaderLanguage::TYPE_MAT2: {
+				GLfloat mat[4];
+
+				for (int i = 0; i < 4; i++) {
+					mat[i] = values[i].real;
+				}
+
+				glUniformMatrix2fv(p_uniform, 1, GL_FALSE, mat);
+			} break;
+
+			case ShaderLanguage::TYPE_MAT3: {
+				GLfloat mat[9];
+
+				for (int i = 0; i < 0; i++) {
+					mat[i] = values[i].real;
+				}
+
+				glUniformMatrix3fv(p_uniform, 1, GL_FALSE, mat);
+
+			} break;
+
+			case ShaderLanguage::TYPE_MAT4: {
+				GLfloat mat[16];
+
+				for (int i = 0; i < 0; i++) {
+					mat[i] = values[i].real;
+				}
+
+				glUniformMatrix4fv(p_uniform, 1, GL_FALSE, mat);
+
+			} break;
+
+			case ShaderLanguage::TYPE_SAMPLER2D: {
+
+			} break;
+
+			case ShaderLanguage::TYPE_ISAMPLER2D: {
+
+			} break;
+
+			case ShaderLanguage::TYPE_USAMPLER2D: {
+
+			} break;
+
+			case ShaderLanguage::TYPE_SAMPLERCUBE: {
+
+			} break;
+		}
+	}
 
 	_FORCE_INLINE_ void _set_uniform_variant(GLint p_uniform, const Variant &p_value) {
 
@@ -303,6 +427,9 @@ public:
 
 				glUniformMatrix4fv(p_uniform, 1, false, matrix);
 			} break;
+			case Variant::OBJECT: {
+
+			} break;
 			default: { ERR_FAIL(); } // do nothing
 		}
 	}
@@ -333,11 +460,9 @@ public:
 		uniforms_dirty = true;
 	}
 
-	void set_uniform(const StringName &p_name, const Variant &p_value) {
+	void set_uniform_with_name(const StringName &p_name, const Pair<ShaderLanguage::DataType, Vector<ShaderLanguage::ConstantNode::Value> > p_value) {
 
-		GLuint loc = get_uniform_location(p_name);
-
-		uniform_values[loc] = p_value;
+		uniform_values[p_name] = p_value;
 
 		uniforms_dirty = true;
 	}

@@ -85,14 +85,30 @@ void ShaderGLES2::bind_uniforms() {
 
 		Variant v;
 
-		if (uniform_values.has(location)) {
-			v = uniform_values[location];
-		} else {
-			v = E->value();
-		}
+		v = E->value();
 
 		_set_uniform_variant(location, v);
 		E = E->next();
+	}
+
+	const Map<StringName, Pair<ShaderLanguage::DataType, Vector<ShaderLanguage::ConstantNode::Value> > >::Element *U = uniform_values.front();
+
+	while (U) {
+
+		GLint location = get_uniform_location(U->key());
+
+		if (location < 0) {
+			location = get_uniform_location(String("m_") + U->key());
+		}
+
+		if (location < 0) {
+			U = U->next();
+			continue;
+		}
+
+		_set_uniform_value(location, U->get());
+
+		U = U->next();
 	}
 
 	// camera uniforms
