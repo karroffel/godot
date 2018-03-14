@@ -221,7 +221,12 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 
 	glBindFramebuffer(GL_FRAMEBUFFER, current_fb);
 
-	glClear(GL_COLOR_BUFFER_BIT);
+	glDepthFunc(GL_LEQUAL);
+	glDepthMask(GL_TRUE);
+	glClearDepth(1.0f);
+	glEnable(GL_DEPTH_TEST);
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	state.scene_shader.bind();
 
@@ -291,6 +296,9 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 			} break;
 		}
 	}
+
+	glDepthMask(GL_FALSE);
+	glDisable(GL_DEPTH_TEST);
 
 	/*
 	//fill up ubo
