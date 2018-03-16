@@ -757,6 +757,8 @@ void RasterizerStorageGLES2::shader_set_code(RID p_shader, const String &p_code)
 	if (mode == VS::SHADER_CANVAS_ITEM) {
 		shader->shader = &canvas->state.canvas_shader;
 
+	} else if (mode == VS::SHADER_SPATIAL) {
+		shader->shader = &scene->state.scene_shader;
 	} else {
 		return;
 	}
@@ -817,6 +819,62 @@ void RasterizerStorageGLES2::_update_shader(Shader *p_shader) const {
 			actions->uniforms = &p_shader->uniforms;
 		} break;
 
+		case VS::SHADER_SPATIAL: {
+			p_shader->spatial.blend_mode = Shader::Spatial::BLEND_MODE_MIX;
+			p_shader->spatial.depth_draw_mode = Shader::Spatial::DEPTH_DRAW_OPAQUE;
+			p_shader->spatial.cull_mode = Shader::Spatial::CULL_MODE_BACK;
+			p_shader->spatial.uses_alpha = false;
+			p_shader->spatial.uses_alpha_scissor = false;
+			p_shader->spatial.uses_discard = false;
+			p_shader->spatial.unshaded = false;
+			p_shader->spatial.no_depth_test = false;
+			p_shader->spatial.uses_sss = false;
+			p_shader->spatial.uses_time = false;
+			p_shader->spatial.uses_vertex_lighting = false;
+			p_shader->spatial.uses_screen_texture = false;
+			p_shader->spatial.uses_depth_texture = false;
+			p_shader->spatial.uses_vertex = false;
+			p_shader->spatial.writes_modelview_or_projection = false;
+			p_shader->spatial.uses_world_coordinates = false;
+
+			shaders.actions_scene.render_mode_values["blend_add"] = Pair<int *, int>(&p_shader->spatial.blend_mode, Shader::Spatial::BLEND_MODE_ADD);
+			shaders.actions_scene.render_mode_values["blend_mix"] = Pair<int *, int>(&p_shader->spatial.blend_mode, Shader::Spatial::BLEND_MODE_MIX);
+			shaders.actions_scene.render_mode_values["blend_sub"] = Pair<int *, int>(&p_shader->spatial.blend_mode, Shader::Spatial::BLEND_MODE_SUB);
+			shaders.actions_scene.render_mode_values["blend_mul"] = Pair<int *, int>(&p_shader->spatial.blend_mode, Shader::Spatial::BLEND_MODE_MUL);
+
+			shaders.actions_scene.render_mode_values["depth_draw_opaque"] = Pair<int *, int>(&p_shader->spatial.depth_draw_mode, Shader::Spatial::DEPTH_DRAW_OPAQUE);
+			shaders.actions_scene.render_mode_values["depth_draw_always"] = Pair<int *, int>(&p_shader->spatial.depth_draw_mode, Shader::Spatial::DEPTH_DRAW_ALWAYS);
+			shaders.actions_scene.render_mode_values["depth_draw_never"] = Pair<int *, int>(&p_shader->spatial.depth_draw_mode, Shader::Spatial::DEPTH_DRAW_NEVER);
+			shaders.actions_scene.render_mode_values["depth_draw_alpha_prepass"] = Pair<int *, int>(&p_shader->spatial.depth_draw_mode, Shader::Spatial::DEPTH_DRAW_ALPHA_PREPASS);
+
+			shaders.actions_scene.render_mode_values["cull_front"] = Pair<int *, int>(&p_shader->spatial.cull_mode, Shader::Spatial::CULL_MODE_FRONT);
+			shaders.actions_scene.render_mode_values["cull_back"] = Pair<int *, int>(&p_shader->spatial.cull_mode, Shader::Spatial::CULL_MODE_BACK);
+			shaders.actions_scene.render_mode_values["cull_disabled"] = Pair<int *, int>(&p_shader->spatial.cull_mode, Shader::Spatial::CULL_MODE_DISABLED);
+
+			shaders.actions_scene.render_mode_flags["unshaded"] = &p_shader->spatial.unshaded;
+			shaders.actions_scene.render_mode_flags["depth_test_disable"] = &p_shader->spatial.no_depth_test;
+
+			shaders.actions_scene.render_mode_flags["vertex_lighting"] = &p_shader->spatial.uses_vertex_lighting;
+
+			shaders.actions_scene.render_mode_flags["world_vertex_coords"] = &p_shader->spatial.uses_world_coordinates;
+
+			shaders.actions_scene.usage_flag_pointers["ALPHA"] = &p_shader->spatial.uses_alpha;
+			shaders.actions_scene.usage_flag_pointers["ALPHA_SCISSOR"] = &p_shader->spatial.uses_alpha_scissor;
+
+			shaders.actions_scene.usage_flag_pointers["SSS_STRENGTH"] = &p_shader->spatial.uses_sss;
+			shaders.actions_scene.usage_flag_pointers["DISCARD"] = &p_shader->spatial.uses_discard;
+			shaders.actions_scene.usage_flag_pointers["SCREEN_TEXTURE"] = &p_shader->spatial.uses_screen_texture;
+			shaders.actions_scene.usage_flag_pointers["DEPTH_TEXTURE"] = &p_shader->spatial.uses_depth_texture;
+			shaders.actions_scene.usage_flag_pointers["TIME"] = &p_shader->spatial.uses_time;
+
+			shaders.actions_scene.write_flag_pointers["MODELVIEW_MATRIX"] = &p_shader->spatial.writes_modelview_or_projection;
+			shaders.actions_scene.write_flag_pointers["PROJECTION_MATRIX"] = &p_shader->spatial.writes_modelview_or_projection;
+			shaders.actions_scene.write_flag_pointers["VERTEX"] = &p_shader->spatial.uses_vertex;
+
+			actions = &shaders.actions_scene;
+			actions->uniforms = &p_shader->uniforms;
+		} break;
+
 		default: {
 			return;
 		} break;
@@ -827,6 +885,8 @@ void RasterizerStorageGLES2::_update_shader(Shader *p_shader) const {
 	ERR_FAIL_COND(err != OK);
 
 	p_shader->shader->set_custom_shader_code(p_shader->custom_code_id, gen_code.vertex, gen_code.vertex_global, gen_code.fragment, gen_code.light, gen_code.fragment_global, gen_code.uniforms, gen_code.texture_uniforms, gen_code.custom_defines);
+
+	print_line(gen_code.fragment);
 
 	p_shader->texture_count = gen_code.texture_uniforms.size();
 	p_shader->texture_hints = gen_code.texture_hints;
@@ -1077,26 +1137,85 @@ Variant RasterizerStorageGLES2::material_get_param(RID p_material, const StringN
 }
 
 void RasterizerStorageGLES2::material_set_line_width(RID p_material, float p_width) {
+	Material *material = material_owner.getornull(p_material);
+	ERR_FAIL_COND(!material);
+
+	material->line_width = p_width;
 }
 
 void RasterizerStorageGLES2::material_set_next_pass(RID p_material, RID p_next_material) {
+	Material *material = material_owner.get(p_material);
+	ERR_FAIL_COND(!material);
+
+	material->next_pass = p_next_material;
 }
 
 bool RasterizerStorageGLES2::material_is_animated(RID p_material) {
-	return false;
+	Material *material = material_owner.get(p_material);
+	ERR_FAIL_COND_V(!material, false);
+	if (material->dirty_list.in_list()) {
+		_update_material(material);
+	}
+
+	bool animated = material->is_animated_cache;
+	if (!animated && material->next_pass.is_valid()) {
+		animated = material_is_animated(material->next_pass);
+	}
+	return animated;
 }
 
 bool RasterizerStorageGLES2::material_casts_shadows(RID p_material) {
-	return false;
+	Material *material = material_owner.get(p_material);
+	ERR_FAIL_COND_V(!material, false);
+	if (material->dirty_list.in_list()) {
+		_update_material(material);
+	}
+
+	bool casts_shadows = material->can_cast_shadow_cache;
+
+	if (!casts_shadows && material->next_pass.is_valid()) {
+		casts_shadows = material_casts_shadows(material->next_pass);
+	}
+
+	return casts_shadows;
 }
 
 void RasterizerStorageGLES2::material_add_instance_owner(RID p_material, RasterizerScene::InstanceBase *p_instance) {
+
+	Material *material = material_owner.getornull(p_material);
+	ERR_FAIL_COND(!material);
+
+	Map<RasterizerScene::InstanceBase *, int>::Element *E = material->instance_owners.find(p_instance);
+	if (E) {
+		E->get()++;
+	} else {
+		material->instance_owners[p_instance] = 1;
+	}
 }
 
 void RasterizerStorageGLES2::material_remove_instance_owner(RID p_material, RasterizerScene::InstanceBase *p_instance) {
+
+	Material *material = material_owner.getornull(p_material);
+	ERR_FAIL_COND(!material);
+
+	Map<RasterizerScene::InstanceBase *, int>::Element *E = material->instance_owners.find(p_instance);
+	ERR_FAIL_COND(!E);
+
+	E->get()--;
+
+	if (E->get() == 0) {
+		material->instance_owners.erase(E);
+	}
 }
 
 void RasterizerStorageGLES2::material_set_render_priority(RID p_material, int priority) {
+	ERR_FAIL_COND(priority < VS::MATERIAL_RENDER_PRIORITY_MIN);
+	ERR_FAIL_COND(priority > VS::MATERIAL_RENDER_PRIORITY_MAX);
+
+	Material *material = material_owner.get(p_material);
+	ERR_FAIL_COND(!material);
+
+	material->render_priority = priority;
 }
 
 void RasterizerStorageGLES2::_update_material(Material *p_material) {
@@ -1133,16 +1252,22 @@ void RasterizerStorageGLES2::_update_material(Material *p_material) {
 				value.second.resize(E->get().default_value.size());
 				switch (E->get().type) {
 					case ShaderLanguage::TYPE_BOOL: {
+						if (value.second.size() < 1)
+							value.second.resize(1);
 						value.second[0].boolean = V->get();
 					} break;
 
 					case ShaderLanguage::TYPE_BVEC2: {
+						if (value.second.size() < 2)
+							value.second.resize(2);
 						int flags = V->get();
 						value.second[0].boolean = flags & 1;
 						value.second[1].boolean = flags & 2;
 					} break;
 
 					case ShaderLanguage::TYPE_BVEC3: {
+						if (value.second.size() < 3)
+							value.second.resize(3);
 						int flags = V->get();
 						value.second[0].boolean = flags & 1;
 						value.second[1].boolean = flags & 2;
@@ -1151,6 +1276,8 @@ void RasterizerStorageGLES2::_update_material(Material *p_material) {
 					} break;
 
 					case ShaderLanguage::TYPE_BVEC4: {
+						if (value.second.size() < 4)
+							value.second.resize(4);
 						int flags = V->get();
 						value.second[0].boolean = flags & 1;
 						value.second[1].boolean = flags & 2;
@@ -1160,23 +1287,25 @@ void RasterizerStorageGLES2::_update_material(Material *p_material) {
 					} break;
 
 					case ShaderLanguage::TYPE_INT: {
+						if (value.second.size() < 1)
+							value.second.resize(1);
 						int val = V->get();
 						value.second[0].sint = val;
 					} break;
 
 					case ShaderLanguage::TYPE_IVEC2: {
+						if (value.second.size() < 2)
+							value.second.resize(2);
 						PoolIntArray val = V->get();
-						ERR_BREAK(val.size() != 2);
-						value.second.resize(2);
 						for (int i = 0; i < val.size(); i++) {
 							value.second[i].sint = val[i];
 						}
 					} break;
 
 					case ShaderLanguage::TYPE_IVEC3: {
+						if (value.second.size() < 3)
+							value.second.resize(3);
 						PoolIntArray val = V->get();
-						ERR_BREAK(val.size() != 3);
-						value.second.resize(3);
 						for (int i = 0; i < val.size(); i++) {
 							value.second[i].sint = val[i];
 						}
@@ -1184,9 +1313,9 @@ void RasterizerStorageGLES2::_update_material(Material *p_material) {
 					} break;
 
 					case ShaderLanguage::TYPE_IVEC4: {
+						if (value.second.size() < 4)
+							value.second.resize(4);
 						PoolIntArray val = V->get();
-						ERR_BREAK(val.size() != 4);
-						value.second.resize(4);
 						for (int i = 0; i < val.size(); i++) {
 							value.second[i].sint = val[i];
 						}
@@ -1194,14 +1323,16 @@ void RasterizerStorageGLES2::_update_material(Material *p_material) {
 					} break;
 
 					case ShaderLanguage::TYPE_UINT: {
+						if (value.second.size() < 1)
+							value.second.resize(1);
 						uint32_t val = V->get();
 						value.second[0].uint = val;
 					} break;
 
 					case ShaderLanguage::TYPE_UVEC2: {
+						if (value.second.size() < 2)
+							value.second.resize(2);
 						PoolIntArray val = V->get();
-						ERR_BREAK(val.size() != 2);
-						value.second.resize(2);
 						for (int i = 0; i < val.size(); i++) {
 							value.second[i].uint = val[i];
 						}
@@ -1209,9 +1340,9 @@ void RasterizerStorageGLES2::_update_material(Material *p_material) {
 					} break;
 
 					case ShaderLanguage::TYPE_UVEC3: {
+						if (value.second.size() < 3)
+							value.second.resize(3);
 						PoolIntArray val = V->get();
-						ERR_BREAK(val.size() != 3);
-						value.second.resize(3);
 						for (int i = 0; i < val.size(); i++) {
 							value.second[i].uint = val[i];
 						}
@@ -1219,9 +1350,9 @@ void RasterizerStorageGLES2::_update_material(Material *p_material) {
 					} break;
 
 					case ShaderLanguage::TYPE_UVEC4: {
+						if (value.second.size() < 4)
+							value.second.resize(4);
 						PoolIntArray val = V->get();
-						ERR_BREAK(val.size() != 4);
-						value.second.resize(4);
 						for (int i = 0; i < val.size(); i++) {
 							value.second[i].uint = val[i];
 						}
@@ -1229,18 +1360,23 @@ void RasterizerStorageGLES2::_update_material(Material *p_material) {
 					} break;
 
 					case ShaderLanguage::TYPE_FLOAT: {
-
+						if (value.second.size() < 1)
+							value.second.resize(1);
 						value.second[0].real = V->get();
 
 					} break;
 
 					case ShaderLanguage::TYPE_VEC2: {
+						if (value.second.size() < 2)
+							value.second.resize(2);
 						Vector2 val = V->get();
 						value.second[0].real = val.x;
 						value.second[1].real = val.y;
 					} break;
 
 					case ShaderLanguage::TYPE_VEC3: {
+						if (value.second.size() < 3)
+							value.second.resize(3);
 						Vector3 val = V->get();
 						value.second[0].real = val.x;
 						value.second[1].real = val.y;
@@ -1248,6 +1384,8 @@ void RasterizerStorageGLES2::_update_material(Material *p_material) {
 					} break;
 
 					case ShaderLanguage::TYPE_VEC4: {
+						if (value.second.size() < 4)
+							value.second.resize(4);
 						if (V->get().get_type() == Variant::PLANE) {
 							Plane val = V->get();
 							value.second[0].real = val.normal.x;
@@ -1332,6 +1470,34 @@ void RasterizerStorageGLES2::_update_material(Material *p_material) {
 		}
 	} else {
 		p_material->textures.clear();
+	}
+}
+
+void RasterizerStorageGLES2::_material_add_geometry(RID p_material, Geometry *p_geometry) {
+	Material *material = material_owner.getornull(p_material);
+	ERR_FAIL_COND(!material);
+
+	Map<Geometry *, int>::Element *I = material->geometry_owners.find(p_geometry);
+
+	if (I) {
+		I->get()++;
+	} else {
+		material->geometry_owners[p_geometry] = 1;
+	}
+}
+
+void RasterizerStorageGLES2::_material_remove_geometry(RID p_material, Geometry *p_geometry) {
+
+	Material *material = material_owner.getornull(p_material);
+	ERR_FAIL_COND(!material);
+
+	Map<Geometry *, int>::Element *I = material->geometry_owners.find(p_geometry);
+	ERR_FAIL_COND(!I);
+
+	I->get()--;
+
+	if (I->get() == 0) {
+		material->geometry_owners.erase(I);
 	}
 }
 
@@ -1599,6 +1765,9 @@ void RasterizerStorageGLES2::mesh_add_surface(RID p_mesh, uint32_t p_format, VS:
 	surface->aabb = p_aabb;
 	surface->max_bone = p_bone_aabbs.size();
 
+	surface->data = array;
+	surface->index_data = p_index_array;
+
 	surface->total_data_size += surface->array_byte_size + surface->index_array_byte_size;
 
 	for (int i = 0; i < surface->skeleton_bone_used.size(); i++) {
@@ -1713,13 +1882,13 @@ void RasterizerStorageGLES2::mesh_surface_set_material(RID p_mesh, int p_surface
 		return;
 
 	if (mesh->surfaces[p_surface]->material.is_valid()) {
-		// TODO _material_remove_geometry(mesh->surfaces[p_surface]->material, mesh->surfaces[p_surface]);
+		_material_remove_geometry(mesh->surfaces[p_surface]->material, mesh->surfaces[p_surface]);
 	}
 
 	mesh->surfaces[p_surface]->material = p_material;
 
 	if (mesh->surfaces[p_surface]->material.is_valid()) {
-		// TODO _material_add_geometry(mesh->surfaces[p_surface]->material, mesh->surfaces[p_surface]);
+		_material_add_geometry(mesh->surfaces[p_surface]->material, mesh->surfaces[p_surface]);
 	}
 
 	mesh->instance_material_change_notify();
@@ -1751,13 +1920,23 @@ int RasterizerStorageGLES2::mesh_surface_get_array_index_len(RID p_mesh, int p_s
 
 PoolVector<uint8_t> RasterizerStorageGLES2::mesh_surface_get_array(RID p_mesh, int p_surface) const {
 
-	WARN_PRINT("GLES2 mesh_surface_get_array is not implemented");
-	return PoolVector<uint8_t>();
+	const Mesh *mesh = mesh_owner.getornull(p_mesh);
+	ERR_FAIL_COND_V(!mesh, PoolVector<uint8_t>());
+	ERR_FAIL_INDEX_V(p_surface, mesh->surfaces.size(), PoolVector<uint8_t>());
+
+	Surface *surface = mesh->surfaces[p_surface];
+
+	return surface->data;
 }
 
 PoolVector<uint8_t> RasterizerStorageGLES2::mesh_surface_get_index_array(RID p_mesh, int p_surface) const {
-	WARN_PRINT("GLES2 mesh_surface_get_index_array is not implemented");
-	return PoolVector<uint8_t>();
+	const Mesh *mesh = mesh_owner.getornull(p_mesh);
+	ERR_FAIL_COND_V(!mesh, PoolVector<uint8_t>());
+	ERR_FAIL_INDEX_V(p_surface, mesh->surfaces.size(), PoolVector<uint8_t>());
+
+	Surface *surface = mesh->surfaces[p_surface];
+
+	return surface->index_data;
 }
 
 uint32_t RasterizerStorageGLES2::mesh_surface_get_format(RID p_mesh, int p_surface) const {
