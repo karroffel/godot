@@ -552,6 +552,14 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 								code += "textureCube";
 							}
 
+						} else if (var_node->name == "mix") {
+
+							if (op_node->arguments[2]->get_datatype() == SL::TYPE_BVEC3) {
+								code += "select";
+							} else {
+								code += "mix";
+							}
+
 						} else if (p_default_actions.renames.has(var_node->name)) {
 							code += p_default_actions.renames[var_node->name];
 						} else if (internal_functions.has(var_node->name)) {

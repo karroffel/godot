@@ -228,12 +228,6 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	state.scene_shader.bind();
-
-	state.scene_shader.set_uniform(SceneShaderGLES2::COLOR, Color(1, 1, 1));
-
-	state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_TRANSFORM, p_cam_transform.inverse());
-	state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_MATRIX, p_cam_projection);
 	storage->frame.clear_request = false;
 
 	glVertexAttrib4f(VS::ARRAY_COLOR, 1, 1, 1, 1);
@@ -248,12 +242,45 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 
 				RasterizerStorageGLES2::Surface **s = m->surfaces.ptrw();
 
-				state.scene_shader.set_uniform(SceneShaderGLES2::MODEL_MATRIX, ib->transform);
-
 				for (int j = 0; j < m->surfaces.size(); j++) {
 					RasterizerStorageGLES2::Surface *surface = s[j];
 
-					RasterizerStorageGLES2::Material *mat = storage->material_owner.getornull(surface->material);
+					RID material = ib->material_override.is_valid() ? ib->material_override : ib->materials[j];
+
+					if (!material.is_valid())
+						material = surface->material;
+
+					// TODO check if material was bound last time
+					if (true) {
+
+						RasterizerStorageGLES2::Material *material_ptr = storage->material_owner.getornull(material);
+						RasterizerStorageGLES2::Shader *shader_ptr = NULL;
+
+						if (material_ptr) {
+							shader_ptr = material_ptr->shader;
+
+							if (shader_ptr && shader_ptr->mode != VS::SHADER_SPATIAL) {
+								shader_ptr = NULL;
+							}
+						}
+
+						if (shader_ptr) {
+							state.scene_shader.set_custom_shader(shader_ptr->custom_code_id);
+							state.scene_shader.bind();
+						} else {
+							state.scene_shader.set_custom_shader(0);
+							state.scene_shader.bind();
+						}
+					}
+
+					state.scene_shader.set_uniform(SceneShaderGLES2::COLOR, Color(1, 1, 1));
+
+					state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_TRANSFORM, p_cam_transform.inverse());
+					state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_MATRIX, p_cam_projection);
+
+					state.scene_shader.set_uniform(SceneShaderGLES2::MODEL_MATRIX, ib->transform);
+
+					// set up textures and stuff
 
 					glBindBuffer(GL_ARRAY_BUFFER, surface->vertex_id);
 
@@ -270,7 +297,6 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 					}
 
 					if (surface->index_array_len > 0) {
-						print_line("indexed draw");
 						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, surface->index_id);
 
 						glDrawElements(gl_primitive[surface->primitive], surface->index_array_len, (surface->array_len >= (1 << 16)) ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT, 0);
@@ -288,6 +314,8 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 					}
 
 					glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+					state.scene_shader.set_custom_shader(0);
 				}
 			} break;
 
