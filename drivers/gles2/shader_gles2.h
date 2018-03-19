@@ -467,6 +467,12 @@ public:
 		uniforms_dirty = true;
 	}
 
+	void clear_uniform_values() {
+		uniform_values.clear();
+
+		uniforms_dirty = true;
+	}
+
 	uint32_t get_version() const { return new_conditional_version.version; }
 
 	void set_uniform_camera(int p_idx, const CameraMatrix &p_mat) {

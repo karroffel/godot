@@ -268,6 +268,12 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 							state.scene_shader.set_custom_shader(shader_ptr->custom_code_id);
 							state.scene_shader.bind();
 
+						} else {
+							state.scene_shader.set_custom_shader(0);
+							state.scene_shader.bind();
+						}
+
+						if (material_ptr && shader_ptr) {
 							// set up textures
 
 							int tc = material_ptr->textures.size();
@@ -314,9 +320,6 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 								state.scene_shader.set_uniform_with_name(material_ptr->textures[i].first, value);
 							}
 							state.scene_shader.bind_uniforms();
-						} else {
-							state.scene_shader.set_custom_shader(0);
-							state.scene_shader.bind();
 						}
 					}
 
