@@ -267,6 +267,53 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 						if (shader_ptr) {
 							state.scene_shader.set_custom_shader(shader_ptr->custom_code_id);
 							state.scene_shader.bind();
+
+							// set up textures
+
+							int tc = material_ptr->textures.size();
+							Pair<StringName, RID> *textures = material_ptr->textures.ptrw();
+
+							ShaderLanguage::ShaderNode::Uniform::Hint *texture_hints = shader_ptr->texture_hints.ptrw();
+
+							for (int i = 0; i < tc; i++) {
+
+								glActiveTexture(GL_TEXTURE0 + i);
+
+								RasterizerStorageGLES2::Texture *t = storage->texture_owner.getornull(textures[i].second);
+
+								if (!t) {
+
+									switch (texture_hints[i]) {
+										case ShaderLanguage::ShaderNode::Uniform::HINT_BLACK_ALBEDO:
+										case ShaderLanguage::ShaderNode::Uniform::HINT_BLACK: {
+											glBindTexture(GL_TEXTURE_2D, storage->resources.black_tex);
+										} break;
+										case ShaderLanguage::ShaderNode::Uniform::HINT_ANISO: {
+											glBindTexture(GL_TEXTURE_2D, storage->resources.aniso_tex);
+										} break;
+										case ShaderLanguage::ShaderNode::Uniform::HINT_NORMAL: {
+											glBindTexture(GL_TEXTURE_2D, storage->resources.normal_tex);
+										} break;
+										default: {
+											glBindTexture(GL_TEXTURE_2D, storage->resources.white_tex);
+										} break;
+									}
+
+									continue;
+								}
+
+								t = t->get_ptr();
+
+								glBindTexture(t->target, t->tex_id);
+
+								Pair<ShaderLanguage::DataType, Vector<ShaderLanguage::ConstantNode::Value> > value;
+								value.first = ShaderLanguage::TYPE_INT;
+								value.second.resize(1);
+								value.second[0].sint = i;
+
+								state.scene_shader.set_uniform_with_name(material_ptr->textures[i].first, value);
+							}
+							state.scene_shader.bind_uniforms();
 						} else {
 							state.scene_shader.set_custom_shader(0);
 							state.scene_shader.bind();
@@ -275,8 +322,10 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 
 					state.scene_shader.set_uniform(SceneShaderGLES2::COLOR, Color(1, 1, 1));
 
-					state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_TRANSFORM, p_cam_transform.inverse());
+					state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_MATRIX, p_cam_transform.inverse());
+					state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_INVERSE_MATRIX, p_cam_transform);
 					state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_MATRIX, p_cam_projection);
+					state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_INVERSE_MATRIX, p_cam_projection.inverse());
 
 					state.scene_shader.set_uniform(SceneShaderGLES2::MODEL_MATRIX, ib->transform);
 

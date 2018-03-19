@@ -554,10 +554,32 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 
 						} else if (var_node->name == "mix") {
 
-							if (op_node->arguments[2]->get_datatype() == SL::TYPE_BVEC3) {
-								code += "select";
-							} else {
-								code += "mix";
+							switch (op_node->arguments[2]->get_datatype()) {
+
+								case SL::TYPE_VEC2:
+								case SL::TYPE_BVEC2: {
+									code += "select2";
+								} break;
+
+								case SL::TYPE_VEC3:
+								case SL::TYPE_BVEC3: {
+									code += "select3";
+								} break;
+
+								case SL::TYPE_VEC4:
+								case SL::TYPE_BVEC4: {
+									code += "select4";
+								} break;
+
+								case SL::TYPE_FLOAT: {
+
+									code += "mix";
+								} break;
+
+								default: {
+									SL::DataType type = op_node->arguments[2]->get_datatype();
+									print_line(String("uhhhh invalid mix with type: ") + itos(type));
+								} break;
 							}
 
 						} else if (p_default_actions.renames.has(var_node->name)) {
@@ -762,8 +784,8 @@ ShaderCompilerGLES2::ShaderCompilerGLES2() {
 	actions[VS::SHADER_SPATIAL].renames["INV_CAMERA_MATRIX"] = "camera_inverse_matrix";
 	actions[VS::SHADER_SPATIAL].renames["CAMERA_MATRIX"] = "camera_matrix";
 	actions[VS::SHADER_SPATIAL].renames["PROJECTION_MATRIX"] = "projection_matrix";
-	actions[VS::SHADER_SPATIAL].renames["INV_PROJECTION_MATRIX"] = "inv_projection_matrix";
-	actions[VS::SHADER_SPATIAL].renames["MODELVIEW_MATRIX"] = "modelview";
+	actions[VS::SHADER_SPATIAL].renames["INV_PROJECTION_MATRIX"] = "projection_inverse_matrix";
+	actions[VS::SHADER_SPATIAL].renames["MODELVIEW_MATRIX"] = "model_matrix_copy";
 
 	actions[VS::SHADER_SPATIAL].renames["VERTEX"] = "vertex.xyz";
 	actions[VS::SHADER_SPATIAL].renames["NORMAL"] = "normal";
