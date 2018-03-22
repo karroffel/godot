@@ -52,6 +52,11 @@
 
 class RasterizerSceneGLES2 : public RasterizerScene {
 public:
+	RID default_material;
+	RID default_material_twosided;
+	RID default_shader;
+	RID default_shader_twosided;
+
 	RasterizerStorageGLES2 *storage;
 	struct State {
 
@@ -241,6 +246,177 @@ public:
 	virtual void gi_probe_instance_set_bounds(RID p_probe, const Vector3 &p_bounds);
 
 	/* RENDER LIST */
+
+	struct RenderList {
+		enum {
+			DEFAULT_MAX_ELEMENTS = 65536,
+			SORT_FLAG_SKELETON = 1,
+			SORT_FLAG_INSTANCING = 2,
+			MAX_DIRECTIONAL_LIGHTS = 16,
+			MAX_LIGHTS = 4096,
+			MAX_REFLECTIONS = 1024,
+
+			SORT_KEY_PRIORITY_SHIFT = 56,
+			SORT_KEY_PRIORITY_MASK = 0xFF,
+			//depth layer for opaque (56-52)
+			SORT_KEY_OPAQUE_DEPTH_LAYER_SHIFT = 52,
+			SORT_KEY_OPAQUE_DEPTH_LAYER_MASK = 0xF,
+//64 bits unsupported in MSVC
+#define SORT_KEY_UNSHADED_FLAG (uint64_t(1) << 49)
+#define SORT_KEY_NO_DIRECTIONAL_FLAG (uint64_t(1) << 48)
+#define SORT_KEY_LIGHTMAP_CAPTURE_FLAG (uint64_t(1) << 47)
+#define SORT_KEY_LIGHTMAP_FLAG (uint64_t(1) << 46)
+#define SORT_KEY_GI_PROBES_FLAG (uint64_t(1) << 45)
+#define SORT_KEY_VERTEX_LIT_FLAG (uint64_t(1) << 44)
+			SORT_KEY_SHADING_SHIFT = 44,
+			SORT_KEY_SHADING_MASK = 63,
+			//44-28 material index
+			SORT_KEY_MATERIAL_INDEX_SHIFT = 28,
+			//28-8 geometry index
+			SORT_KEY_GEOMETRY_INDEX_SHIFT = 8,
+			//bits 5-7 geometry type
+			SORT_KEY_GEOMETRY_TYPE_SHIFT = 5,
+			//bits 0-5 for flags
+			SORT_KEY_OPAQUE_PRE_PASS = 8,
+			SORT_KEY_CULL_DISABLED_FLAG = 4,
+			SORT_KEY_SKELETON_FLAG = 2,
+			SORT_KEY_MIRROR_FLAG = 1
+		};
+
+		int max_elements;
+
+		struct Element {
+			RasterizerScene::InstanceBase *instance;
+
+			RasterizerStorageGLES2::Geometry *geometry;
+			RasterizerStorageGLES2::Material *material;
+			RasterizerStorageGLES2::GeometryOwner *owner;
+
+			uint64_t sort_key;
+		};
+
+		Element *base_elements;
+		Element **elements;
+
+		int element_count;
+		int alpha_element_count;
+
+		void clear() {
+			element_count = 0;
+			alpha_element_count = 0;
+		}
+
+		// sorts
+
+		struct SortByKey {
+			_FORCE_INLINE_ bool operator()(const Element *A, const Element *B) const {
+				return A->sort_key < B->sort_key;
+			}
+		};
+
+		void sort_by_key(bool p_alpha) {
+			SortArray<Element *, SortByKey> sorter;
+
+			if (p_alpha) {
+				sorter.sort(&elements[max_elements - alpha_element_count], alpha_element_count);
+			} else {
+				sorter.sort(elements, element_count);
+			}
+		}
+
+		struct SortByDepth {
+
+			_FORCE_INLINE_ bool operator()(const Element *A, const Element *B) const {
+				return A->instance->depth < B->instance->depth;
+			}
+		};
+
+		void sort_by_depth(bool p_alpha) { //used for shadows
+
+			SortArray<Element *, SortByDepth> sorter;
+			if (p_alpha) {
+				sorter.sort(&elements[max_elements - alpha_element_count], alpha_element_count);
+			} else {
+				sorter.sort(elements, element_count);
+			}
+		}
+
+		struct SortByReverseDepthAndPriority {
+
+			_FORCE_INLINE_ bool operator()(const Element *A, const Element *B) const {
+				uint32_t layer_A = uint32_t(A->sort_key >> SORT_KEY_PRIORITY_SHIFT);
+				uint32_t layer_B = uint32_t(B->sort_key >> SORT_KEY_PRIORITY_SHIFT);
+				if (layer_A == layer_B) {
+					return A->instance->depth > B->instance->depth;
+				} else {
+					return layer_A < layer_B;
+				}
+			}
+		};
+
+		void sort_by_reverse_depth_and_priority(bool p_alpha) { //used for alpha
+
+			SortArray<Element *, SortByReverseDepthAndPriority> sorter;
+			if (p_alpha) {
+				sorter.sort(&elements[max_elements - alpha_element_count], alpha_element_count);
+			} else {
+				sorter.sort(elements, element_count);
+			}
+		}
+
+		// element adding and stuff
+
+		_FORCE_INLINE_ Element *add_element() {
+			if (element_count + alpha_element_count >= max_elements)
+				return NULL;
+
+			elements[element_count] = &base_elements[element_count];
+			return elements[element_count++];
+		}
+
+		_FORCE_INLINE_ Element *add_alpha_element() {
+			if (element_count + alpha_element_count >= max_elements) {
+				return NULL;
+			}
+
+			int idx = max_elements - alpha_element_count - 1;
+			elements[idx] = &base_elements[idx];
+			alpha_element_count++;
+			return elements[idx];
+		}
+
+		void init() {
+			element_count = 0;
+			alpha_element_count = 0;
+
+			elements = memnew_arr(Element *, max_elements);
+			base_elements = memnew_arr(Element, max_elements);
+
+			for (int i = 0; i < max_elements; i++) {
+				elements[i] = &base_elements[i];
+			}
+		}
+
+		RenderList() {
+			max_elements = DEFAULT_MAX_ELEMENTS;
+		}
+
+		~RenderList() {
+			memdelete_arr(elements);
+			memdelete_arr(base_elements);
+		}
+	};
+
+	RenderList render_list;
+
+	void _add_geometry(RasterizerStorageGLES2::Geometry *p_geometry, InstanceBase *p_instance, RasterizerStorageGLES2::GeometryOwner *p_owner, int p_material, bool p_depth_pass, bool p_shadow_pass);
+	void _add_geometry_with_material(RasterizerStorageGLES2::Geometry *p_geometry, InstanceBase *p_instance, RasterizerStorageGLES2::GeometryOwner *p_owner, RasterizerStorageGLES2::Material *p_material, bool p_depth_pass, bool p_shadow_pass);
+
+	void _fill_render_list(InstanceBase **p_cull_result, int p_cull_count, bool p_depth_pass, bool p_shadow_pass);
+	void _render_render_list(RenderList::Element **p_elements, int p_element_count, const Transform &p_view_transform, const CameraMatrix &p_projection, GLuint p_base_env, bool p_reverse_cull, bool p_alpha_pass, bool p_shadow, bool p_directional_add, bool p_directional_shadows);
+
+	void _setup_material(RasterizerStorageGLES2::Material *p_material);
+	void _render_geometry(RenderList::Element *p_element);
 
 	virtual void render_scene(const Transform &p_cam_transform, const CameraMatrix &p_cam_projection, bool p_cam_ortogonal, InstanceBase **p_cull_result, int p_cull_count, RID *p_light_cull_result, int p_light_cull_count, RID *p_reflection_probe_cull_result, int p_reflection_probe_cull_count, RID p_environment, RID p_shadow_atlas, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass);
 	virtual void render_shadow(RID p_light, RID p_shadow_atlas, int p_pass, InstanceBase **p_cull_result, int p_cull_count);

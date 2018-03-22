@@ -93,6 +93,6 @@ FRAGMENT_SHADER_CODE
 
 }
 
-	gl_FragColor = color * vec4(albedo, alpha);
+	gl_FragColor = vec4(albedo, alpha);
 
 }
