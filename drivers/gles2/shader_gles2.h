@@ -460,9 +460,16 @@ public:
 		uniforms_dirty = true;
 	}
 
+	/*
 	void set_uniform_with_name(const StringName &p_name, const Pair<ShaderLanguage::DataType, Vector<ShaderLanguage::ConstantNode::Value> > p_value) {
 
 		uniform_values[p_name] = p_value;
+
+		uniforms_dirty = true;
+	}
+
+	void unset_uniform_with_name(const StringName &p_name) {
+		uniform_values.erase(p_name);
 
 		uniforms_dirty = true;
 	}
@@ -471,7 +478,11 @@ public:
 		uniform_values.clear();
 
 		uniforms_dirty = true;
-	}
+	} */
+
+	// this void* is actually a RasterizerStorageGLES2::Material, but C++ doesn't
+	// like forward declared nested classes.
+	void use_material(void *p_material, int p_num_predef_textures);
 
 	uint32_t get_version() const { return new_conditional_version.version; }
 

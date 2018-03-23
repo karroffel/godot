@@ -216,13 +216,13 @@ void RasterizerSceneGLES2::_add_geometry(RasterizerStorageGLES2::Geometry *p_geo
 	} else if (p_material >= 0) {
 		material_src = p_instance->materials[p_material];
 	} else {
-		p_geometry->material;
+		material_src = p_geometry->material;
 	}
 
 	if (material_src.is_valid()) {
 		material = storage->material_owner.getornull(material_src);
 
-		if (material->shader || !material->shader->valid) {
+		if (!material->shader || !material->shader->valid) {
 			material = NULL;
 		}
 	}
@@ -368,15 +368,8 @@ void RasterizerSceneGLES2::_setup_material(RasterizerStorageGLES2::Material *p_m
 		t = t->get_ptr();
 
 		glBindTexture(t->target, t->tex_id);
-
-		Pair<ShaderLanguage::DataType, Vector<ShaderLanguage::ConstantNode::Value> > value;
-		value.first = ShaderLanguage::TYPE_INT;
-		value.second.resize(1);
-		value.second[0].sint = i;
-
-		state.scene_shader.set_uniform_with_name(p_material->textures[i].first, value);
 	}
-	state.scene_shader.bind_uniforms();
+	state.scene_shader.use_material((void *)p_material, 0);
 }
 
 void RasterizerSceneGLES2::_render_geometry(RenderList::Element *p_element) {
@@ -399,6 +392,8 @@ void RasterizerSceneGLES2::_render_geometry(RenderList::Element *p_element) {
 				if (s->attribs[i].enabled) {
 					glEnableVertexAttribArray(i);
 					glVertexAttribPointer(s->attribs[i].index, s->attribs[i].size, s->attribs[i].type, s->attribs[i].normalized, s->attribs[i].stride, (uint8_t *)0 + s->attribs[i].offset);
+				} else {
+					glDisableVertexAttribArray(i);
 				}
 			}
 

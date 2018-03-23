@@ -476,6 +476,7 @@ public:
 
 		Shader *shader;
 		Map<StringName, Variant> params;
+		Set<StringName> param_unset;
 		SelfList<Material> list;
 		SelfList<Material> dirty_list;
 		Vector<Pair<StringName, RID> > textures;

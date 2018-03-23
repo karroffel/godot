@@ -59,6 +59,10 @@ void RasterizerCanvasGLES2::_set_uniforms() {
 void RasterizerCanvasGLES2::canvas_begin() {
 
 	state.canvas_shader.bind();
+	if (storage->frame.current_rt) {
+		glBindFramebuffer(GL_FRAMEBUFFER, storage->frame.current_rt->fbo);
+		glColorMask(1, 1, 1, 1);
+	}
 
 	if (storage->frame.clear_request) {
 		glClearColor(storage->frame.clear_request_color.r,
@@ -69,10 +73,12 @@ void RasterizerCanvasGLES2::canvas_begin() {
 		storage->frame.clear_request = false;
 	}
 
+	/*
 	if (storage->frame.current_rt) {
 		glBindFramebuffer(GL_FRAMEBUFFER, storage->frame.current_rt->fbo);
 		glColorMask(1, 1, 1, 1);
 	}
+	*/
 
 	reset_canvas();
 
@@ -314,7 +320,7 @@ void RasterizerCanvasGLES2::_draw_gui_primitive(int p_points, const Vector2 *p_v
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *current_clip, bool &reclip) {
+void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *current_clip, bool &reclip, RasterizerStorageGLES2::Material *p_material) {
 
 	int command_count = p_item->commands.size();
 	Item::Command **commands = p_item->commands.ptrw();
@@ -331,9 +337,10 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 
 				state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_TEXTURE_RECT, false);
 				state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_UV_ATTRIBUTE, false);
-				state.canvas_shader.bind();
-
-				_set_uniforms();
+				if (state.canvas_shader.bind()) {
+					_set_uniforms();
+					state.canvas_shader.use_material((void *)p_material, 2);
+				}
 
 				_bind_canvas_texture(RID(), RID());
 
@@ -361,7 +368,6 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 
 					_draw_gui_primitive(4, verts, NULL, NULL);
 				}
-
 			} break;
 
 			case Item::Command::TYPE_RECT: {
@@ -375,8 +381,10 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 
 				state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_TEXTURE_RECT, true);
 				state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_UV_ATTRIBUTE, false);
-				if (state.canvas_shader.bind())
+				if (state.canvas_shader.bind()) {
 					_set_uniforms();
+					state.canvas_shader.use_material((void *)p_material, 2);
+				}
 
 				RasterizerStorageGLES2::Texture *tex = _bind_canvas_texture(r->texture, r->normal_map);
 
@@ -456,8 +464,10 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 
 				state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_TEXTURE_RECT, false);
 				state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_UV_ATTRIBUTE, true);
-				if (state.canvas_shader.bind())
+				if (state.canvas_shader.bind()) {
 					_set_uniforms();
+					state.canvas_shader.use_material((void *)p_material, 2);
+				}
 
 				glDisableVertexAttribArray(VS::ARRAY_COLOR);
 				glVertexAttrib4fv(VS::ARRAY_COLOR, np->color.components);
@@ -612,8 +622,10 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 				state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_TEXTURE_RECT, false);
 				state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_UV_ATTRIBUTE, false);
 
-				if (state.canvas_shader.bind())
+				if (state.canvas_shader.bind()) {
 					_set_uniforms();
+					state.canvas_shader.use_material((void *)p_material, 2);
+				}
 
 				static const int num_points = 32;
 
@@ -641,8 +653,10 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 				state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_TEXTURE_RECT, false);
 				state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_UV_ATTRIBUTE, true);
 
-				if (state.canvas_shader.bind())
+				if (state.canvas_shader.bind()) {
 					_set_uniforms();
+					state.canvas_shader.use_material((void *)p_material, 2);
+				}
 
 				RasterizerStorageGLES2::Texture *texture = _bind_canvas_texture(polygon->texture, polygon->normal_map);
 
@@ -660,8 +674,10 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 				state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_TEXTURE_RECT, false);
 				state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_UV_ATTRIBUTE, false);
 
-				if (state.canvas_shader.bind())
+				if (state.canvas_shader.bind()) {
 					_set_uniforms();
+					state.canvas_shader.use_material((void *)p_material, 2);
+				}
 
 				_bind_canvas_texture(RID(), RID());
 
@@ -691,8 +707,10 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 				state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_TEXTURE_RECT, false);
 				state.canvas_shader.set_conditional(CanvasShaderGLES2::USE_UV_ATTRIBUTE, true);
 
-				if (state.canvas_shader.bind())
+				if (state.canvas_shader.bind()) {
 					_set_uniforms();
+					state.canvas_shader.use_material((void *)p_material, 2);
+				}
 
 				ERR_CONTINUE(primitive->points.size() < 1);
 
@@ -852,10 +870,10 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 		Item *material_owner = ci->material_owner ? ci->material_owner : ci;
 
 		RID material = material_owner->material;
+		RasterizerStorageGLES2::Material *material_ptr = storage->material_owner.getornull(material);
 
 		if (material != canvas_last_material || rebind_shader) {
 
-			RasterizerStorageGLES2::Material *material_ptr = storage->material_owner.getornull(material);
 			RasterizerStorageGLES2::Shader *shader_ptr = NULL;
 
 			if (material_ptr) {
@@ -920,18 +938,13 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 					}
 
 					glBindTexture(t->target, t->tex_id);
-
-					Pair<ShaderLanguage::DataType, Vector<ShaderLanguage::ConstantNode::Value> > value;
-					value.first = ShaderLanguage::TYPE_INT;
-					value.second.resize(1);
-					value.second[0].sint = 2 + i;
-
-					state.canvas_shader.set_uniform_with_name(material_ptr->textures[i].first, value);
 				}
+
 			} else {
 				state.canvas_shader.set_custom_shader(0);
 				state.canvas_shader.bind();
 			}
+			state.canvas_shader.use_material((void *)material_ptr, 2);
 
 			shader_cache = shader_ptr;
 
@@ -986,7 +999,7 @@ void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, cons
 
 		_set_uniforms();
 
-		_canvas_item_render_commands(p_item_list, NULL, reclip);
+		_canvas_item_render_commands(p_item_list, NULL, reclip, material_ptr);
 
 		rebind_shader = true; // hacked in for now.
 

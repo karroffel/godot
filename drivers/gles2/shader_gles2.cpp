@@ -33,6 +33,9 @@
 #include "print_string.h"
 #include "string_builder.h"
 
+#include "rasterizer_gles2.h"
+#include "rasterizer_storage_gles2.h"
+
 //#define DEBUG_OPENGL
 
 // #include "shaders/copy.glsl.gen.h"
@@ -89,26 +92,6 @@ void ShaderGLES2::bind_uniforms() {
 
 		_set_uniform_variant(location, v);
 		E = E->next();
-	}
-
-	const Map<StringName, Pair<ShaderLanguage::DataType, Vector<ShaderLanguage::ConstantNode::Value> > >::Element *U = uniform_values.front();
-
-	while (U) {
-
-		GLint location = get_uniform_location(U->key());
-
-		if (location < 0) {
-			location = get_uniform_location(String("m_") + U->key());
-		}
-
-		if (location < 0) {
-			U = U->next();
-			continue;
-		}
-
-		_set_uniform_value(location, U->get());
-
-		U = U->next();
 	}
 
 	// camera uniforms
@@ -698,6 +681,250 @@ void ShaderGLES2::free_custom_shader(uint32_t p_code_id) {
 		conditional_version.code_version = 0;
 
 	custom_code_map.erase(p_code_id);
+}
+
+void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
+	RasterizerStorageGLES2::Material *material = (RasterizerStorageGLES2::Material *)p_material;
+
+	if (!material) {
+		return;
+	}
+
+	// bind uniforms
+	for (Map<StringName, ShaderLanguage::ShaderNode::Uniform>::Element *E = material->shader->uniforms.front(); E; E = E->next()) {
+
+		if (E->get().order < 0)
+			continue; // this is a texture, doesn't go here
+
+		Map<StringName, Variant>::Element *V = material->params.find(E->key());
+
+		Pair<ShaderLanguage::DataType, Vector<ShaderLanguage::ConstantNode::Value> > value;
+
+		value.first = E->get().type;
+		value.second = E->get().default_value;
+
+		if (V) {
+			value.second = Vector<ShaderLanguage::ConstantNode::Value>();
+			value.second.resize(E->get().default_value.size());
+			switch (E->get().type) {
+				case ShaderLanguage::TYPE_BOOL: {
+					if (value.second.size() < 1)
+						value.second.resize(1);
+					value.second[0].boolean = V->get();
+				} break;
+
+				case ShaderLanguage::TYPE_BVEC2: {
+					if (value.second.size() < 2)
+						value.second.resize(2);
+					int flags = V->get();
+					value.second[0].boolean = flags & 1;
+					value.second[1].boolean = flags & 2;
+				} break;
+
+				case ShaderLanguage::TYPE_BVEC3: {
+					if (value.second.size() < 3)
+						value.second.resize(3);
+					int flags = V->get();
+					value.second[0].boolean = flags & 1;
+					value.second[1].boolean = flags & 2;
+					value.second[2].boolean = flags & 4;
+
+				} break;
+
+				case ShaderLanguage::TYPE_BVEC4: {
+					if (value.second.size() < 4)
+						value.second.resize(4);
+					int flags = V->get();
+					value.second[0].boolean = flags & 1;
+					value.second[1].boolean = flags & 2;
+					value.second[2].boolean = flags & 4;
+					value.second[3].boolean = flags & 8;
+
+				} break;
+
+				case ShaderLanguage::TYPE_INT: {
+					if (value.second.size() < 1)
+						value.second.resize(1);
+					int val = V->get();
+					value.second[0].sint = val;
+				} break;
+
+				case ShaderLanguage::TYPE_IVEC2: {
+					if (value.second.size() < 2)
+						value.second.resize(2);
+					PoolIntArray val = V->get();
+					for (int i = 0; i < val.size(); i++) {
+						value.second[i].sint = val[i];
+					}
+				} break;
+
+				case ShaderLanguage::TYPE_IVEC3: {
+					if (value.second.size() < 3)
+						value.second.resize(3);
+					PoolIntArray val = V->get();
+					for (int i = 0; i < val.size(); i++) {
+						value.second[i].sint = val[i];
+					}
+
+				} break;
+
+				case ShaderLanguage::TYPE_IVEC4: {
+					if (value.second.size() < 4)
+						value.second.resize(4);
+					PoolIntArray val = V->get();
+					for (int i = 0; i < val.size(); i++) {
+						value.second[i].sint = val[i];
+					}
+
+				} break;
+
+				case ShaderLanguage::TYPE_UINT: {
+					if (value.second.size() < 1)
+						value.second.resize(1);
+					uint32_t val = V->get();
+					value.second[0].uint = val;
+				} break;
+
+				case ShaderLanguage::TYPE_UVEC2: {
+					if (value.second.size() < 2)
+						value.second.resize(2);
+					PoolIntArray val = V->get();
+					for (int i = 0; i < val.size(); i++) {
+						value.second[i].uint = val[i];
+					}
+
+				} break;
+
+				case ShaderLanguage::TYPE_UVEC3: {
+					if (value.second.size() < 3)
+						value.second.resize(3);
+					PoolIntArray val = V->get();
+					for (int i = 0; i < val.size(); i++) {
+						value.second[i].uint = val[i];
+					}
+
+				} break;
+
+				case ShaderLanguage::TYPE_UVEC4: {
+					if (value.second.size() < 4)
+						value.second.resize(4);
+					PoolIntArray val = V->get();
+					for (int i = 0; i < val.size(); i++) {
+						value.second[i].uint = val[i];
+					}
+
+				} break;
+
+				case ShaderLanguage::TYPE_FLOAT: {
+					if (value.second.size() < 1)
+						value.second.resize(1);
+					value.second[0].real = V->get();
+
+				} break;
+
+				case ShaderLanguage::TYPE_VEC2: {
+					if (value.second.size() < 2)
+						value.second.resize(2);
+					Vector2 val = V->get();
+					value.second[0].real = val.x;
+					value.second[1].real = val.y;
+				} break;
+
+				case ShaderLanguage::TYPE_VEC3: {
+					if (value.second.size() < 3)
+						value.second.resize(3);
+					Vector3 val = V->get();
+					value.second[0].real = val.x;
+					value.second[1].real = val.y;
+					value.second[2].real = val.z;
+				} break;
+
+				case ShaderLanguage::TYPE_VEC4: {
+					if (value.second.size() < 4)
+						value.second.resize(4);
+					if (V->get().get_type() == Variant::PLANE) {
+						Plane val = V->get();
+						value.second[0].real = val.normal.x;
+						value.second[1].real = val.normal.y;
+						value.second[2].real = val.normal.z;
+						value.second[3].real = val.d;
+					} else {
+						Color val = V->get();
+						value.second[0].real = val.r;
+						value.second[1].real = val.g;
+						value.second[2].real = val.b;
+						value.second[3].real = val.a;
+					}
+
+				} break;
+
+				case ShaderLanguage::TYPE_MAT2: {
+					Transform2D val = V->get();
+
+					// TODO
+
+				} break;
+
+				case ShaderLanguage::TYPE_MAT3: {
+					Basis val = V->get();
+
+					// TODO
+				} break;
+
+				case ShaderLanguage::TYPE_MAT4: {
+					Transform val = V->get();
+
+					// TODO
+				} break;
+
+				case ShaderLanguage::TYPE_SAMPLER2D: {
+
+				} break;
+
+				case ShaderLanguage::TYPE_ISAMPLER2D: {
+
+				} break;
+
+				case ShaderLanguage::TYPE_USAMPLER2D: {
+
+				} break;
+
+				case ShaderLanguage::TYPE_SAMPLERCUBE: {
+
+				} break;
+			}
+		}
+
+		GLint location = get_uniform_location(E->key());
+
+		if (location < 0) {
+			location = get_uniform_location(String("m_") + E->key());
+		}
+
+		_set_uniform_value(location, value);
+	}
+
+	// bind textures
+	int tc = material->textures.size();
+	Pair<StringName, RID> *textures = material->textures.ptrw();
+
+	ShaderLanguage::ShaderNode::Uniform::Hint *texture_hints = material->shader->texture_hints.ptrw();
+
+	for (int i = 0; i < tc; i++) {
+
+		Pair<ShaderLanguage::DataType, Vector<ShaderLanguage::ConstantNode::Value> > value;
+		value.first = ShaderLanguage::TYPE_INT;
+		value.second.resize(1);
+		value.second[0].sint = p_num_predef_textures + i;
+
+		GLint location = get_uniform_location(textures[i].first);
+
+		if (location < 0) {
+			location = get_uniform_location(String("m_") + textures[i].first);
+		}
+
+		_set_uniform_value(location, value);
+	}
 }
 
 void ShaderGLES2::set_base_material_tex_index(int p_idx) {
