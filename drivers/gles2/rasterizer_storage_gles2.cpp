@@ -100,9 +100,14 @@ Ref<Image> RasterizerStorageGLES2::_get_gl_image_and_format(const Ref<Image> &p_
 
 		} break;
 		case Image::FORMAT_RF: {
-			ERR_EXPLAIN("R float texture not supported");
-			ERR_FAIL_V(image);
+			if (!config.float_texture_supported) {
+				ERR_EXPLAIN("R float texture not supported");
+				ERR_FAIL_V(image);
+			}
 
+			r_gl_internal_format = GL_ALPHA;
+			r_gl_format = GL_ALPHA;
+			r_gl_type = GL_FLOAT;
 		} break;
 		case Image::FORMAT_RGF: {
 			ERR_EXPLAIN("RG float texture not supported");
@@ -110,15 +115,27 @@ Ref<Image> RasterizerStorageGLES2::_get_gl_image_and_format(const Ref<Image> &p_
 
 		} break;
 		case Image::FORMAT_RGBF: {
+			if (!config.float_texture_supported) {
 
-			ERR_EXPLAIN("RGB float texture not supported");
-			ERR_FAIL_V(image);
+				ERR_EXPLAIN("RGB float texture not supported");
+				ERR_FAIL_V(image);
+			}
+
+			r_gl_internal_format = GL_RGB;
+			r_gl_format = GL_RGB;
+			r_gl_type = GL_FLOAT;
 
 		} break;
 		case Image::FORMAT_RGBAF: {
+			if (!config.float_texture_supported) {
 
-			ERR_EXPLAIN("RGBA float texture not supported");
-			ERR_FAIL_V(image);
+				ERR_EXPLAIN("RGBA float texture not supported");
+				ERR_FAIL_V(image);
+			}
+
+			r_gl_internal_format = GL_RGBA;
+			r_gl_format = GL_RGBA;
+			r_gl_type = GL_FLOAT;
 
 		} break;
 		case Image::FORMAT_RH: {
@@ -1964,10 +1981,32 @@ RID RasterizerStorageGLES2::immediate_get_material(RID p_immediate) const {
 /* SKELETON API */
 
 RID RasterizerStorageGLES2::skeleton_create() {
-	return RID();
+
+	Skeleton *skeleton = memnew(Skeleton);
+
+	glGenTextures(1, &skeleton->texture);
+
+	return skeleton_owner.make_rid(skeleton);
 }
 
 void RasterizerStorageGLES2::skeleton_allocate(RID p_skeleton, int p_bones, bool p_2d_skeleton) {
+
+	Skeleton *skeleton = skeleton_owner.getornull(p_skeleton);
+	ERR_FAIL_COND(!skeleton);
+	ERR_FAIL_COND(p_bones < 0);
+
+	if (skeleton->size == p_bones && skeleton->use_2d == p_2d_skeleton) {
+		return;
+	}
+
+	skeleton->size = p_bones;
+	skeleton->use_2d = p_2d_skeleton;
+
+	int height = p_bones / 256;
+	if (p_bones % 256)
+		height++;
+
+	glActiveTexture(GL_TEXTURE0);
 }
 
 int RasterizerStorageGLES2::skeleton_get_bone_count(RID p_skeleton) const {
@@ -2683,6 +2722,9 @@ void RasterizerStorageGLES2::initialize() {
 	}
 
 	config.shrink_textures_x2 = false;
+	config.float_texture_supported = config.extensions.find("GL_ARB_texture_float") != NULL || config.extensions.find("GL_OES_texture_float") != NULL;
+
+	print_line(config.float_texture_supported ? "float true" : "float false");
 
 	frame.count = 0;
 	frame.delta = 0;

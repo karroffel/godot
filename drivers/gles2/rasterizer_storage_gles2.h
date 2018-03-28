@@ -76,6 +76,8 @@ public:
 
 		Set<String> extensions;
 
+		bool float_texture_supported;
+
 		bool keep_original_textures;
 
 		bool no_depth_prepass;
@@ -727,6 +729,29 @@ public:
 	virtual AABB immediate_get_aabb(RID p_immediate) const;
 
 	/* SKELETON API */
+
+	struct Skeleton : RID_Data {
+
+		bool use_2d;
+
+		int size;
+		Vector<float> skeleton_texture;
+		GLuint texture;
+
+		SelfList<Skeleton> update_list;
+		Set<RasterizerScene::InstanceBase *> instances;
+
+		Skeleton() :
+				update_list(this) {
+			size = 0;
+			use_2d = false;
+			texture = 0;
+		}
+	};
+
+	mutable RID_Owner<Skeleton> skeleton_owner;
+
+	SelfList<Skeleton>::List skeleton_update_list;
 
 	void update_dirty_skeletons();
 
