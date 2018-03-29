@@ -84,8 +84,6 @@ protected:
 	bool uniforms_dirty;
 
 private:
-	friend class RasterizerStorageGLES2;
-
 	//@TODO Optimize to a fixed set of shader pools and use a LRU
 	int uniform_count;
 	int texunit_pair_count;
