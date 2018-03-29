@@ -802,6 +802,7 @@ void RasterizerStorageGLES2::_update_shader(Shader *p_shader) const {
 	p_shader->valid = false;
 
 	p_shader->uniforms.clear();
+	p_shader->uniform_locations.clear();
 
 	ShaderCompilerGLES2::GeneratedCode gen_code;
 	ShaderCompilerGLES2::IdentifierActions *actions = NULL;
@@ -903,13 +904,26 @@ void RasterizerStorageGLES2::_update_shader(Shader *p_shader) const {
 
 	p_shader->shader->set_custom_shader_code(p_shader->custom_code_id, gen_code.vertex, gen_code.vertex_global, gen_code.fragment, gen_code.light, gen_code.fragment_global, gen_code.uniforms, gen_code.texture_uniforms, gen_code.custom_defines);
 
-	print_line(gen_code.fragment);
-
 	p_shader->texture_count = gen_code.texture_uniforms.size();
 	p_shader->texture_hints = gen_code.texture_hints;
 
 	p_shader->uses_vertex_time = gen_code.uses_vertex_time;
 	p_shader->uses_fragment_time = gen_code.uses_fragment_time;
+
+	p_shader->shader->set_custom_shader(p_shader->custom_code_id);
+	p_shader->shader->bind();
+
+	// cache uniform locations
+
+	List<PropertyInfo> params;
+	shader_get_param_list(p_shader->self, &params);
+
+	for (List<PropertyInfo>::Element *E = params.front(); E; E = E->next()) {
+		p_shader->uniform_locations[E->get().name] = p_shader->shader->get_uniform_location(String("m_") + E->get().name);
+		if (p_shader->uniform_locations[E->get().name] < 0) {
+			p_shader->uniform_locations[E->get().name] = p_shader->shader->get_uniform_location(E->get().name);
+		}
+	}
 
 	for (SelfList<Material> *E = p_shader->materials.first(); E; E = E->next()) {
 		_material_make_dirty(E->self());

@@ -467,8 +467,10 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 	glVertexAttrib4f(VS::ARRAY_COLOR, 1, 1, 1, 1);
 
 	render_list.sort_by_key(false);
-
 	_render_render_list(render_list.elements, render_list.element_count, p_cam_transform, p_cam_projection, 0, false, false, false, false, false);
+
+	render_list.sort_by_key(true);
+	_render_render_list(&render_list.elements[render_list.max_elements - render_list.alpha_element_count], render_list.alpha_element_count, p_cam_transform, p_cam_projection, 0, false, true, false, false, false);
 
 	//
 

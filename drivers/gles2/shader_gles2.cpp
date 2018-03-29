@@ -134,6 +134,23 @@ bool ShaderGLES2::bind() {
 
 	glUseProgram(version->id);
 
+	// find out uniform names and locations
+
+	int count;
+	glGetProgramiv(version->id, GL_ACTIVE_UNIFORMS, &count);
+	version->uniform_names.resize(count);
+
+	for (int i = 0; i < count; i++) {
+		GLchar uniform_name[1024];
+		int len = 0;
+		glGetActiveUniform(version->id, i, 1024, &len, NULL, NULL, uniform_name);
+
+		uniform_name[len] = '\0';
+		String name = String((const char *)uniform_name);
+
+		version->uniform_names[i] = name;
+	}
+
 	bind_uniforms();
 
 	DEBUG_TEST_ERROR("use program");
@@ -236,7 +253,7 @@ ShaderGLES2::Version *ShaderGLES2::get_current_version() {
 	}
 
 	if (!_v)
-		version_map[conditional_version];
+		version_map[conditional_version] = Version();
 
 	Version &v = version_map[conditional_version];
 
@@ -895,10 +912,18 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 			}
 		}
 
-		GLint location = get_uniform_location(E->key());
+		// GLint location = get_uniform_location(E->key());
 
-		if (location < 0) {
-			location = get_uniform_location(String("m_") + E->key());
+		GLint location;
+		if (material->shader->uniform_locations.has(E->key())) {
+			location = material->shader->uniform_locations[E->key()];
+		} else {
+			int idx = version->uniform_names.find(E->key()); // TODO maybe put those in a Map?
+			if (idx < 0) {
+				location = -1;
+			} else {
+				location = version->uniform_location[idx];
+			}
 		}
 
 		_set_uniform_value(location, value);
@@ -917,10 +942,16 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 		value.second.resize(1);
 		value.second[0].sint = p_num_predef_textures + i;
 
-		GLint location = get_uniform_location(textures[i].first);
+		// GLint location = get_uniform_location(textures[i].first);
 
-		if (location < 0) {
-			location = get_uniform_location(String("m_") + textures[i].first);
+		// if (location < 0) {
+		//	location = material->shader->uniform_locations[textures[i].first];
+		// }
+		GLint location = -1;
+		if (material->shader->uniform_locations.has(textures[i].first)) {
+			location = material->shader->uniform_locations[textures[i].first];
+		} else {
+			location = get_uniform_location(textures[i].first);
 		}
 
 		_set_uniform_value(location, value);

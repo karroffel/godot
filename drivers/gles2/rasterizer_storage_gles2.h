@@ -351,6 +351,7 @@ public:
 		SelfList<Material>::List materials;
 
 		Map<StringName, ShaderLanguage::ShaderNode::Uniform> uniforms;
+		Map<StringName, GLuint> uniform_locations;
 
 		uint32_t texture_count;
 

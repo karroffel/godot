@@ -47,6 +47,8 @@
 #include "core/pair.h"
 #include "servers/visual/shader_language.h"
 
+class RasterizerStorageGLES2;
+
 class ShaderGLES2 {
 protected:
 	struct Enum {
@@ -82,6 +84,8 @@ protected:
 	bool uniforms_dirty;
 
 private:
+	friend class RasterizerStorageGLES2;
+
 	//@TODO Optimize to a fixed set of shader pools and use a LRU
 	int uniform_count;
 	int texunit_pair_count;
@@ -108,6 +112,7 @@ private:
 		GLuint id;
 		GLuint vert_id;
 		GLuint frag_id;
+		Vector<StringName> uniform_names;
 		GLint *uniform_location;
 		Vector<GLint> texture_uniform_locations;
 		Vector<GLint> custom_uniform_locations;
@@ -459,26 +464,6 @@ public:
 		}
 		uniforms_dirty = true;
 	}
-
-	/*
-	void set_uniform_with_name(const StringName &p_name, const Pair<ShaderLanguage::DataType, Vector<ShaderLanguage::ConstantNode::Value> > p_value) {
-
-		uniform_values[p_name] = p_value;
-
-		uniforms_dirty = true;
-	}
-
-	void unset_uniform_with_name(const StringName &p_name) {
-		uniform_values.erase(p_name);
-
-		uniforms_dirty = true;
-	}
-
-	void clear_uniform_values() {
-		uniform_values.clear();
-
-		uniforms_dirty = true;
-	} */
 
 	// this void* is actually a RasterizerStorageGLES2::Material, but C++ doesn't
 	// like forward declared nested classes.
