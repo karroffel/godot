@@ -427,6 +427,12 @@ void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList:
 
 		RasterizerStorageGLES2::Material *material = e->material;
 
+		RasterizerStorageGLES2::Skeleton *skeleton = storage->skeleton_owner.getornull(e->instance->skeleton);
+
+		if (skeleton) {
+			print_line("SKELETON LOCATED");
+		}
+
 		_setup_material(material);
 
 		state.scene_shader.set_uniform(SceneShaderGLES2::COLOR, Color(1, 1, 1));

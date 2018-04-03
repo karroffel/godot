@@ -736,8 +736,10 @@ public:
 		bool use_2d;
 
 		int size;
-		Vector<float> skeleton_texture;
-		GLuint texture;
+
+		// TODO use float textures for storage
+
+		Vector<float> bone_data;
 
 		SelfList<Skeleton> update_list;
 		Set<RasterizerScene::InstanceBase *> instances;
@@ -746,7 +748,6 @@ public:
 				update_list(this) {
 			size = 0;
 			use_2d = false;
-			texture = 0;
 		}
 	};
 

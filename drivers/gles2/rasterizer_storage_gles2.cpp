@@ -1264,6 +1264,40 @@ void RasterizerStorageGLES2::_update_material(Material *p_material) {
 		return;
 	}
 
+	{
+		bool can_cast_shadow = false;
+		bool is_animated = false;
+
+		if (p_material->shader && p_material->shader->mode == VS::SHADER_SPATIAL) {
+
+			if (p_material->shader->spatial.blend_mode == Shader::Spatial::BLEND_MODE_MIX &&
+					(!p_material->shader->spatial.uses_alpha || (p_material->shader->spatial.uses_alpha && p_material->shader->spatial.depth_draw_mode == Shader::Spatial::DEPTH_DRAW_ALPHA_PREPASS))) {
+				can_cast_shadow = true;
+			}
+
+			if (p_material->shader->spatial.uses_discard && p_material->shader->uses_fragment_time) {
+				is_animated = true;
+			}
+
+			if (p_material->shader->spatial.uses_vertex && p_material->shader->uses_vertex_time) {
+				is_animated = true;
+			}
+
+			if (can_cast_shadow != p_material->can_cast_shadow_cache || is_animated != p_material->is_animated_cache) {
+				p_material->can_cast_shadow_cache = can_cast_shadow;
+				p_material->is_animated_cache = is_animated;
+
+				for (Map<Geometry *, int>::Element *E = p_material->geometry_owners.front(); E; E = E->next()) {
+					E->key()->material_changed_notify();
+				}
+
+				for (Map<RasterizerScene::InstanceBase *, int>::Element *E = p_material->instance_owners.front(); E; E = E->next()) {
+					E->key()->base_material_changed();
+				}
+			}
+		}
+	}
+
 	// uniforms and other thigns will be set in the use_material method in ShaderGLES2
 
 	if (p_material->shader && p_material->shader->texture_count > 0) {
@@ -1998,8 +2032,6 @@ RID RasterizerStorageGLES2::skeleton_create() {
 
 	Skeleton *skeleton = memnew(Skeleton);
 
-	glGenTextures(1, &skeleton->texture);
-
 	return skeleton_owner.make_rid(skeleton);
 }
 
@@ -2016,28 +2048,129 @@ void RasterizerStorageGLES2::skeleton_allocate(RID p_skeleton, int p_bones, bool
 	skeleton->size = p_bones;
 	skeleton->use_2d = p_2d_skeleton;
 
-	int height = p_bones / 256;
-	if (p_bones % 256)
-		height++;
+	// TODO use float texture for vertex shader
 
-	glActiveTexture(GL_TEXTURE0);
+	if (skeleton->use_2d) {
+		skeleton->bone_data.resize(p_bones * 4 * 2);
+	} else {
+		skeleton->bone_data.resize(p_bones * 4 * 3);
+	}
 }
 
 int RasterizerStorageGLES2::skeleton_get_bone_count(RID p_skeleton) const {
-	return 0;
+	Skeleton *skeleton = skeleton_owner.getornull(p_skeleton);
+	ERR_FAIL_COND_V(!skeleton, 0);
+
+	return skeleton->size;
 }
 
 void RasterizerStorageGLES2::skeleton_bone_set_transform(RID p_skeleton, int p_bone, const Transform &p_transform) {
+	Skeleton *skeleton = skeleton_owner.getornull(p_skeleton);
+	ERR_FAIL_COND(!skeleton);
+
+	ERR_FAIL_INDEX(p_bone, skeleton->size);
+	ERR_FAIL_COND(skeleton->use_2d);
+
+	float *bone_data = skeleton->bone_data.ptrw();
+
+	int base_offset = p_bone * 4 * 3;
+
+	bone_data[base_offset + 0] = p_transform.basis[0].x;
+	bone_data[base_offset + 1] = p_transform.basis[0].y;
+	bone_data[base_offset + 2] = p_transform.basis[0].z;
+	bone_data[base_offset + 3] = p_transform.origin.x;
+
+	bone_data[base_offset + 4] = p_transform.basis[1].x;
+	bone_data[base_offset + 5] = p_transform.basis[1].y;
+	bone_data[base_offset + 6] = p_transform.basis[1].z;
+	bone_data[base_offset + 7] = p_transform.origin.y;
+
+	bone_data[base_offset + 8] = p_transform.basis[2].x;
+	bone_data[base_offset + 9] = p_transform.basis[2].y;
+	bone_data[base_offset + 10] = p_transform.basis[2].z;
+	bone_data[base_offset + 11] = p_transform.origin.z;
+
+	if (!skeleton->update_list.in_list()) {
+		skeleton_update_list.add(&skeleton->update_list);
+	}
 }
 
 Transform RasterizerStorageGLES2::skeleton_bone_get_transform(RID p_skeleton, int p_bone) const {
-	return Transform();
+	Skeleton *skeleton = skeleton_owner.getornull(p_skeleton);
+	ERR_FAIL_COND_V(!skeleton, Transform());
+
+	ERR_FAIL_INDEX_V(p_bone, skeleton->size, Transform());
+	ERR_FAIL_COND_V(skeleton->use_2d, Transform());
+
+	const float *bone_data = skeleton->bone_data.ptr();
+
+	Transform ret;
+
+	int base_offset = p_bone * 4 * 3;
+
+	ret.basis[0].x = bone_data[base_offset + 0];
+	ret.basis[0].y = bone_data[base_offset + 1];
+	ret.basis[0].z = bone_data[base_offset + 2];
+	ret.origin.x = bone_data[base_offset + 3];
+
+	ret.basis[1].x = bone_data[base_offset + 4];
+	ret.basis[1].y = bone_data[base_offset + 5];
+	ret.basis[1].z = bone_data[base_offset + 6];
+	ret.origin.y = bone_data[base_offset + 7];
+
+	ret.basis[2].x = bone_data[base_offset + 8];
+	ret.basis[2].y = bone_data[base_offset + 9];
+	ret.basis[2].z = bone_data[base_offset + 10];
+	ret.origin.z = bone_data[base_offset + 11];
+
+	return ret;
 }
 void RasterizerStorageGLES2::skeleton_bone_set_transform_2d(RID p_skeleton, int p_bone, const Transform2D &p_transform) {
+	Skeleton *skeleton = skeleton_owner.getornull(p_skeleton);
+	ERR_FAIL_COND(!skeleton);
+
+	ERR_FAIL_INDEX(p_bone, skeleton->size);
+	ERR_FAIL_COND(!skeleton->use_2d);
+
+	float *bone_data = skeleton->bone_data.ptrw();
+
+	int base_offset = p_bone * 4 * 2;
+
+	bone_data[base_offset + 0] = p_transform[0][0];
+	bone_data[base_offset + 1] = p_transform[1][0];
+	bone_data[base_offset + 2] = 0;
+	bone_data[base_offset + 3] = p_transform[2][0];
+	bone_data[base_offset + 4] = p_transform[0][1];
+	bone_data[base_offset + 5] = p_transform[1][1];
+	bone_data[base_offset + 6] = 0;
+	bone_data[base_offset + 7] = p_transform[2][1];
+
+	if (!skeleton->update_list.in_list()) {
+		skeleton_update_list.add(&skeleton->update_list);
+	}
 }
 
 Transform2D RasterizerStorageGLES2::skeleton_bone_get_transform_2d(RID p_skeleton, int p_bone) const {
-	return Transform2D();
+	Skeleton *skeleton = skeleton_owner.getornull(p_skeleton);
+	ERR_FAIL_COND_V(!skeleton, Transform2D());
+
+	ERR_FAIL_INDEX_V(p_bone, skeleton->size, Transform2D());
+	ERR_FAIL_COND_V(!skeleton->use_2d, Transform2D());
+
+	const float *bone_data = skeleton->bone_data.ptr();
+
+	Transform2D ret;
+
+	int base_offset = p_bone * 4 * 2;
+
+	ret[0][0] = bone_data[base_offset + 0];
+	ret[1][0] = bone_data[base_offset + 1];
+	ret[2][0] = bone_data[base_offset + 3];
+	ret[0][1] = bone_data[base_offset + 4];
+	ret[1][1] = bone_data[base_offset + 5];
+	ret[2][1] = bone_data[base_offset + 7];
+
+	return ret;
 }
 
 void RasterizerStorageGLES2::skeleton_set_base_transform_2d(RID p_skeleton, const Transform2D &p_base_transform) {
