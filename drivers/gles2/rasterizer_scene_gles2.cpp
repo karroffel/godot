@@ -28,6 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 #include "rasterizer_scene_gles2.h"
+#include "math/transform.h"
 #include "math_funcs.h"
 #include "os/os.h"
 #include "project_settings.h"
@@ -372,6 +373,119 @@ void RasterizerSceneGLES2::_setup_material(RasterizerStorageGLES2::Material *p_m
 	state.scene_shader.use_material((void *)p_material, 0);
 }
 
+void RasterizerSceneGLES2::_setup_geometry(RenderList::Element *p_element, RasterizerStorageGLES2::Skeleton *p_skeleton) {
+
+	ERR_FAIL_COND(p_skeleton->use_2d);
+
+	PoolVector<float> &transform_buffer = storage->resources.skeleton_transform_cpu_buffer;
+
+	switch (p_element->instance->base_type) {
+		case VS::INSTANCE_MESH: {
+			RasterizerStorageGLES2::Surface *s = static_cast<RasterizerStorageGLES2::Surface *>(p_element->geometry);
+
+			ERR_EXPLAIN("Can't apply pose: mesh doesn't have bone data or bone weights.");
+			ERR_FAIL_COND(!s->attribs[VS::ARRAY_BONES].enabled || !s->attribs[VS::ARRAY_WEIGHTS].enabled);
+
+			// 3 * vec4 per vertex
+			if (transform_buffer.size() < s->array_len * 12) {
+				transform_buffer.resize(s->array_len * 12);
+			}
+
+			const size_t bones_offset = s->attribs[VS::ARRAY_BONES].offset;
+			const size_t bones_stride = s->attribs[VS::ARRAY_BONES].stride;
+			const size_t bone_weight_offset = s->attribs[VS::ARRAY_WEIGHTS].offset;
+			const size_t bone_weight_stride = s->attribs[VS::ARRAY_WEIGHTS].stride;
+
+			{
+				PoolVector<float>::Write write = transform_buffer.write();
+				float *buffer = write.ptr();
+
+				PoolVector<uint8_t>::Read vertex_array_read = s->data.read();
+				const uint8_t *vertex_data = vertex_array_read.ptr();
+
+				for (int i = 0; i < s->array_len; i++) {
+
+					// do magic
+
+					size_t bones[4];
+					float bone_weight[4];
+
+					if (s->attribs[VS::ARRAY_BONES].type == GL_UNSIGNED_BYTE) {
+						// read as byte
+						const uint8_t *bones_ptr = vertex_data + bones_offset + (i * bones_stride);
+						bones[0] = bones_ptr[0];
+						bones[1] = bones_ptr[1];
+						bones[2] = bones_ptr[2];
+						bones[3] = bones_ptr[3];
+					} else {
+						// read as short
+						const uint16_t *bones_ptr = (const uint16_t *)(vertex_data + bones_offset + (i * bones_stride));
+						bones[0] = bones_ptr[0];
+						bones[1] = bones_ptr[1];
+						bones[2] = bones_ptr[2];
+						bones[3] = bones_ptr[3];
+					}
+
+					if (s->attribs[VS::ARRAY_WEIGHTS].type == GL_FLOAT) {
+						// read as float
+						const float *weight_ptr = (const float *)(vertex_data + bone_weight_offset + (i * bone_weight_stride));
+						bone_weight[0] = weight_ptr[0];
+						bone_weight[1] = weight_ptr[1];
+						bone_weight[2] = weight_ptr[2];
+						bone_weight[3] = weight_ptr[3];
+					} else {
+						// read as half
+						const uint16_t *weight_ptr = (const uint16_t *)(vertex_data + bone_weight_offset + (i * bone_weight_stride));
+						bone_weight[0] = (weight_ptr[0] / (float)UINT16_MAX);
+						bone_weight[1] = (weight_ptr[1] / (float)UINT16_MAX);
+						bone_weight[2] = (weight_ptr[2] / (float)UINT16_MAX);
+						bone_weight[3] = (weight_ptr[2] / (float)UINT16_MAX);
+					}
+
+					size_t offset = i * 12;
+
+					Transform transform;
+
+					Transform bone_transforms[4] = {
+						storage->skeleton_bone_get_transform(p_element->instance->skeleton, bones[0]),
+						storage->skeleton_bone_get_transform(p_element->instance->skeleton, bones[1]),
+						storage->skeleton_bone_get_transform(p_element->instance->skeleton, bones[2]),
+						storage->skeleton_bone_get_transform(p_element->instance->skeleton, bones[3]),
+					};
+
+					transform.origin =
+							bone_weight[0] * bone_transforms[0].origin +
+							bone_weight[1] * bone_transforms[1].origin +
+							bone_weight[2] * bone_transforms[2].origin +
+							bone_weight[3] * bone_transforms[3].origin;
+
+					transform.basis =
+							bone_transforms[0].basis * bone_weight[0] +
+							bone_transforms[1].basis * bone_weight[1] +
+							bone_transforms[2].basis * bone_weight[2] +
+							bone_transforms[3].basis * bone_weight[3];
+
+					float row[3][4] = {
+						{ transform.basis[0][0], transform.basis[0][1], transform.basis[0][2], transform.origin[0] },
+						{ transform.basis[1][0], transform.basis[1][1], transform.basis[1][2], transform.origin[1] },
+						{ transform.basis[2][0], transform.basis[2][1], transform.basis[2][2], transform.origin[2] },
+					};
+
+					size_t transform_buffer_offset = i * 12;
+
+					copymem(&buffer[transform_buffer_offset], row, sizeof(row));
+				}
+			}
+
+			storage->_update_skeleton_transform_buffer(transform_buffer, s->array_len * 12);
+		} break;
+
+		default: {
+
+		} break;
+	}
+}
+
 void RasterizerSceneGLES2::_render_geometry(RenderList::Element *p_element) {
 
 	switch (p_element->instance->base_type) {
@@ -381,6 +495,27 @@ void RasterizerSceneGLES2::_render_geometry(RenderList::Element *p_element) {
 			RasterizerStorageGLES2::Surface *s = static_cast<RasterizerStorageGLES2::Surface *>(p_element->geometry);
 
 			// set up
+
+			if (p_element->instance->skeleton.is_valid()) {
+				glBindBuffer(GL_ARRAY_BUFFER, storage->resources.skeleton_transform_buffer);
+
+				glEnableVertexAttribArray(VS::ARRAY_MAX + 0);
+				glEnableVertexAttribArray(VS::ARRAY_MAX + 1);
+				glEnableVertexAttribArray(VS::ARRAY_MAX + 2);
+
+				glVertexAttribPointer(VS::ARRAY_MAX + 0, 4, GL_FLOAT, GL_FALSE, sizeof(float) * 12, (const void *)(sizeof(float) * 4 * 0));
+				glVertexAttribPointer(VS::ARRAY_MAX + 1, 4, GL_FLOAT, GL_FALSE, sizeof(float) * 12, (const void *)(sizeof(float) * 4 * 1));
+				glVertexAttribPointer(VS::ARRAY_MAX + 2, 4, GL_FLOAT, GL_FALSE, sizeof(float) * 12, (const void *)(sizeof(float) * 4 * 2));
+			} else {
+				// just to make sure
+				glDisableVertexAttribArray(VS::ARRAY_MAX + 0);
+				glDisableVertexAttribArray(VS::ARRAY_MAX + 1);
+				glDisableVertexAttribArray(VS::ARRAY_MAX + 2);
+
+				glVertexAttrib4f(VS::ARRAY_MAX + 0, 1, 0, 0, 0);
+				glVertexAttrib4f(VS::ARRAY_MAX + 1, 0, 1, 0, 0);
+				glVertexAttrib4f(VS::ARRAY_MAX + 2, 0, 0, 1, 0);
+			}
 
 			glBindBuffer(GL_ARRAY_BUFFER, s->vertex_id);
 
@@ -414,6 +549,15 @@ void RasterizerSceneGLES2::_render_geometry(RenderList::Element *p_element) {
 			if (s->index_array_len > 0) {
 				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 			}
+
+			if (p_element->instance->skeleton.is_valid()) {
+				glBindBuffer(GL_ARRAY_BUFFER, storage->resources.skeleton_transform_buffer);
+
+				glDisableVertexAttribArray(VS::ARRAY_MAX + 0);
+				glDisableVertexAttribArray(VS::ARRAY_MAX + 1);
+				glDisableVertexAttribArray(VS::ARRAY_MAX + 2);
+			}
+
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 		} break;
@@ -430,7 +574,7 @@ void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList:
 		RasterizerStorageGLES2::Skeleton *skeleton = storage->skeleton_owner.getornull(e->instance->skeleton);
 
 		if (skeleton) {
-			print_line("SKELETON LOCATED");
+			_setup_geometry(e, skeleton);
 		}
 
 		_setup_material(material);

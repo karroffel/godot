@@ -14,6 +14,11 @@ attribute highp vec3 vertex; // attrib:0
 attribute vec4 color_attrib; // attrib:3
 attribute vec2 uv_attrib; // attrib:4
 
+attribute highp vec4 bone_transform_row_0; // attrib:9
+attribute highp vec4 bone_transform_row_1; // attrib:10
+attribute highp vec4 bone_transform_row_2; // attrib:11
+
+
 uniform mat4 model_matrix;
 uniform mat4 camera_matrix;
 uniform mat4 camera_inverse_matrix;
@@ -34,7 +39,13 @@ void main() {
 	uv_interp = uv_attrib;
 	vec4 outvec = vec4(vertex, 1.0);
 
-	mat4 model_matrix_copy = model_matrix;
+	highp mat4 bone_transform = mat4(1.0);
+	bone_transform[0] = vec4(bone_transform_row_0.x, bone_transform_row_1.x, bone_transform_row_2.x, 0.0);
+	bone_transform[1] = vec4(bone_transform_row_0.y, bone_transform_row_1.y, bone_transform_row_2.y, 0.0);
+	bone_transform[2] = vec4(bone_transform_row_0.z, bone_transform_row_1.z, bone_transform_row_2.z, 0.0);
+	bone_transform[3] = vec4(bone_transform_row_0.w, bone_transform_row_1.w, bone_transform_row_2.w, 1.0);
+
+	mat4 model_matrix_copy = bone_transform * model_matrix;
 
 	mat4 world_transform = mat4(1.0);
 

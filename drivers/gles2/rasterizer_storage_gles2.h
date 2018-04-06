@@ -30,6 +30,7 @@
 #ifndef RASTERIZERSTORAGEGLES2_H
 #define RASTERIZERSTORAGEGLES2_H
 
+#include "dvector.h"
 #include "self_list.h"
 #include "servers/visual/rasterizer.h"
 #include "servers/visual/shader_language.h"
@@ -93,6 +94,10 @@ public:
 
 		GLuint quadie;
 		GLuint quadie_array;
+
+		size_t skeleton_transform_buffer_size;
+		GLuint skeleton_transform_buffer;
+		PoolVector<float> skeleton_transform_cpu_buffer;
 
 	} resources;
 
@@ -765,6 +770,8 @@ public:
 	virtual void skeleton_bone_set_transform_2d(RID p_skeleton, int p_bone, const Transform2D &p_transform);
 	virtual Transform2D skeleton_bone_get_transform_2d(RID p_skeleton, int p_bone) const;
 	virtual void skeleton_set_base_transform_2d(RID p_skeleton, const Transform2D &p_base_transform);
+
+	void _update_skeleton_transform_buffer(const PoolVector<float> &p_data, size_t p_size);
 
 	/* Light API */
 

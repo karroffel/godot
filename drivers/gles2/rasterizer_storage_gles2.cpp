@@ -32,6 +32,8 @@
 #include "rasterizer_canvas_gles2.h"
 #include "rasterizer_scene_gles2.h"
 
+#include "math/transform.h"
+
 #include "servers/visual/shader_language.h"
 
 GLuint RasterizerStorageGLES2::system_fbo = 0;
@@ -2176,6 +2178,23 @@ Transform2D RasterizerStorageGLES2::skeleton_bone_get_transform_2d(RID p_skeleto
 void RasterizerStorageGLES2::skeleton_set_base_transform_2d(RID p_skeleton, const Transform2D &p_base_transform) {
 }
 
+void RasterizerStorageGLES2::_update_skeleton_transform_buffer(const PoolVector<float> &p_data, size_t p_size) {
+
+	glBindBuffer(GL_ARRAY_BUFFER, resources.skeleton_transform_buffer);
+
+	if (p_size > resources.skeleton_transform_buffer_size) {
+		// new requested buffer is bigger, so resizing the GPU buffer
+
+		resources.skeleton_transform_buffer_size = p_size;
+
+		glBufferData(GL_ARRAY_BUFFER, p_size * sizeof(float), p_data.read().ptr(), GL_DYNAMIC_DRAW);
+	} else {
+		glBufferSubData(GL_ARRAY_BUFFER, 0, p_size * sizeof(float), p_data.read().ptr());
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
 void RasterizerStorageGLES2::update_dirty_skeletons() {
 }
 
@@ -2938,6 +2957,12 @@ void RasterizerStorageGLES2::initialize() {
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 8, 8, 0, GL_RGB, GL_UNSIGNED_BYTE, anisotexdata);
 		glGenerateMipmap(GL_TEXTURE_2D);
 		glBindTexture(GL_TEXTURE_2D, 0);
+	}
+
+	// skeleton buffer
+	{
+		resources.skeleton_transform_buffer_size = 0;
+		glGenBuffers(1, &resources.skeleton_transform_buffer);
 	}
 }
 
