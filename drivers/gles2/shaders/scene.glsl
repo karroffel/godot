@@ -45,7 +45,7 @@ void main() {
 	bone_transform[2] = vec4(bone_transform_row_0.z, bone_transform_row_1.z, bone_transform_row_2.z, 0.0);
 	bone_transform[3] = vec4(bone_transform_row_0.w, bone_transform_row_1.w, bone_transform_row_2.w, 1.0);
 
-	mat4 model_matrix_copy = bone_transform * model_matrix;
+	mat4 model_matrix_copy = model_matrix;
 
 	mat4 world_transform = mat4(1.0);
 
@@ -55,7 +55,7 @@ VERTEX_SHADER_CODE
 
 }
 
-	gl_Position = projection_matrix * camera_matrix * model_matrix_copy * outvec;
+	gl_Position = (projection_matrix * (camera_matrix * (bone_transform * (model_matrix_copy * outvec))));
 
 }
 
