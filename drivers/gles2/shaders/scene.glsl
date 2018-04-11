@@ -10,14 +10,26 @@ precision mediump int;
 
 #include "stdlib.glsl"
 
-attribute highp vec3 vertex; // attrib:0
-attribute vec4 color_attrib; // attrib:3
-attribute vec2 uv_attrib; // attrib:4
+attribute highp vec3 vertex_attrib; // attrib:0
+attribute vec3 normal_attrib; // attrib:1
 
+#ifdef ENABLE_COLOR_INTERP
+attribute vec4 color_attrib; // attrib:3
+#endif
+
+#ifdef ENABLE_UV_INTERP
+attribute vec2 uv_attrib; // attrib:4
+#endif
+
+#ifdef ENABLE_UV2_INTERP
+attribute vec2 uv2_attrib; // attrib:5
+#endif
+
+#ifdef USE_SKELETON
 attribute highp vec4 bone_transform_row_0; // attrib:9
 attribute highp vec4 bone_transform_row_1; // attrib:10
 attribute highp vec4 bone_transform_row_2; // attrib:11
-
+#endif
 
 uniform mat4 model_matrix;
 uniform mat4 camera_matrix;
@@ -27,25 +39,53 @@ uniform mat4 projection_inverse_matrix;
 
 
 varying highp vec3 vertex_interp;
+varying vec3 normal_interp;
+
+#ifdef ENABLE_COLOR_INTERP
 varying vec4 color_interp;
+#endif
+
+#ifdef ENABLE_UV_INTERP
 varying vec2 uv_interp;
+#endif
+
+#ifdef ENABLE_UV2_INTERP
+varying vec2 uv2_interp;
+#endif
 
 VERTEX_SHADER_GLOBALS
 
 void main() {
 
-	vertex_interp = vertex;
-	color_interp = color_attrib;
-	uv_interp = uv_attrib;
-	vec4 outvec = vec4(vertex, 1.0);
+	vertex_interp = vertex_attrib;
+	normal_interp = normal_attrib;
 
+#ifdef ENABLE_COLOR_INTERP
+	color_interp = color_attrib;
+#endif
+
+#ifdef ENABLE_UV_INTERP
+	uv_interp = uv_attrib;
+#endif
+
+#ifdef ENABLE_UV2_INTERP
+	uv2_interp = uv2_attrib;
+#endif
+
+	vec4 outvec = vec4(vertex_attrib, 1.0);
+
+	mat4 model_matrix_copy = model_matrix;
+
+#ifdef USE_SKELETON
 	highp mat4 bone_transform = mat4(1.0);
 	bone_transform[0] = vec4(bone_transform_row_0.x, bone_transform_row_1.x, bone_transform_row_2.x, 0.0);
 	bone_transform[1] = vec4(bone_transform_row_0.y, bone_transform_row_1.y, bone_transform_row_2.y, 0.0);
 	bone_transform[2] = vec4(bone_transform_row_0.z, bone_transform_row_1.z, bone_transform_row_2.z, 0.0);
 	bone_transform[3] = vec4(bone_transform_row_0.w, bone_transform_row_1.w, bone_transform_row_2.w, 1.0);
 
-	mat4 model_matrix_copy = model_matrix;
+	model_matrix_copy = bone_transform * model_matrix;
+#endif
+
 
 	mat4 world_transform = mat4(1.0);
 
@@ -55,7 +95,7 @@ VERTEX_SHADER_CODE
 
 }
 
-	gl_Position = (projection_matrix * (camera_matrix * (bone_transform * (model_matrix_copy * outvec))));
+	gl_Position = (projection_matrix * (camera_matrix * (model_matrix_copy * outvec)));
 
 }
 
@@ -71,8 +111,6 @@ precision mediump int;
 
 #include "stdlib.glsl"
 
-uniform vec4 color;
-
 uniform mat4 model_matrix;
 uniform mat4 camera_matrix;
 uniform mat4 camera_inverse_matrix;
@@ -80,8 +118,19 @@ uniform mat4 projection_matrix;
 uniform mat4 projection_inverse_matrix;
 
 varying highp vec3 vertex_interp;
+varying vec3 normal_interp;
+
+#ifdef ENABLE_COLOR_INTERP
 varying vec4 color_interp;
+#endif
+
+#ifdef ENABLE_UV_INTERP
 varying vec2 uv_interp;
+#endif
+
+#ifdef ENABLE_UV2_INTERP
+varying vec2 uv2_interp;
+#endif
 
 FRAGMENT_SHADER_GLOBALS
 
