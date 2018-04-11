@@ -73,6 +73,12 @@ precision mediump int;
 
 uniform vec4 color;
 
+uniform mat4 model_matrix;
+uniform mat4 camera_matrix;
+uniform mat4 camera_inverse_matrix;
+uniform mat4 projection_matrix;
+uniform mat4 projection_inverse_matrix;
+
 varying highp vec3 vertex_interp;
 varying vec4 color_interp;
 varying vec2 uv_interp;
