@@ -10,6 +10,12 @@ precision mediump int;
 
 #include "stdlib.glsl"
 
+
+
+//
+// attributes
+//
+
 attribute highp vec3 vertex_attrib; // attrib:0
 attribute vec3 normal_attrib; // attrib:1
 
@@ -31,12 +37,25 @@ attribute highp vec4 bone_transform_row_1; // attrib:10
 attribute highp vec4 bone_transform_row_2; // attrib:11
 #endif
 
+
+
+//
+// uniforms
+//
+
 uniform mat4 model_matrix;
 uniform mat4 camera_matrix;
 uniform mat4 camera_inverse_matrix;
 uniform mat4 projection_matrix;
 uniform mat4 projection_inverse_matrix;
 
+uniform highp float time;
+
+
+
+//
+// varyings
+//
 
 varying highp vec3 vertex_interp;
 varying vec3 normal_interp;
@@ -52,6 +71,8 @@ varying vec2 uv_interp;
 #ifdef ENABLE_UV2_INTERP
 varying vec2 uv2_interp;
 #endif
+
+
 
 VERTEX_SHADER_GLOBALS
 
@@ -115,11 +136,22 @@ precision mediump int;
 
 #include "stdlib.glsl"
 
+//
+// uniforms
+//
+
 uniform mat4 model_matrix;
 uniform mat4 camera_matrix;
 uniform mat4 camera_inverse_matrix;
 uniform mat4 projection_matrix;
 uniform mat4 projection_inverse_matrix;
+
+uniform highp float time;
+
+
+//
+// varyings
+//
 
 varying highp vec3 vertex_interp;
 varying vec3 normal_interp;
