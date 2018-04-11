@@ -707,6 +707,10 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 		return;
 	}
 
+	if (!material->shader) {
+		return;
+	}
+
 	// bind uniforms
 	for (Map<StringName, ShaderLanguage::ShaderNode::Uniform>::Element *E = material->shader->uniforms.front(); E; E = E->next()) {
 

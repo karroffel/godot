@@ -54,6 +54,8 @@ void RasterizerCanvasGLES2::_set_uniforms() {
 	state.canvas_shader.set_uniform(CanvasShaderGLES2::EXTRA_MATRIX, state.uniforms.extra_matrix);
 
 	state.canvas_shader.set_uniform(CanvasShaderGLES2::FINAL_MODULATE, state.uniforms.final_modulate);
+
+	state.canvas_shader.set_uniform(CanvasShaderGLES2::TIME, storage->frame.time[0]);
 }
 
 void RasterizerCanvasGLES2::canvas_begin() {
