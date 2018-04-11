@@ -87,6 +87,10 @@ void main() {
 #endif
 
 
+	// FIXME: what to do about instancing?
+	vec4 instance_custom = vec4(0.0);
+
+
 	mat4 world_transform = mat4(1.0);
 
 {
