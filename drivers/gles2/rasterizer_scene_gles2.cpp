@@ -386,8 +386,9 @@ void RasterizerSceneGLES2::_setup_geometry(RenderList::Element *p_element, Raste
 			case VS::INSTANCE_MESH: {
 				RasterizerStorageGLES2::Surface *s = static_cast<RasterizerStorageGLES2::Surface *>(p_element->geometry);
 
-				ERR_EXPLAIN("Can't apply pose: mesh doesn't have bone data or bone weights.");
-				ERR_FAIL_COND(!s->attribs[VS::ARRAY_BONES].enabled || !s->attribs[VS::ARRAY_WEIGHTS].enabled);
+				if (!s->attribs[VS::ARRAY_BONES].enabled || !s->attribs[VS::ARRAY_WEIGHTS].enabled) {
+					break; // the whole instance has a skeleton, but this surface is not affected by it.
+				}
 
 				// 3 * vec4 per vertex
 				if (transform_buffer.size() < s->array_len * 12) {
@@ -516,7 +517,7 @@ void RasterizerSceneGLES2::_render_geometry(RenderList::Element *p_element) {
 
 			// set up
 
-			if (p_element->instance->skeleton.is_valid()) {
+			if (p_element->instance->skeleton.is_valid() && s->attribs[VS::ARRAY_BONES].enabled && s->attribs[VS::ARRAY_WEIGHTS].enabled) {
 				glBindBuffer(GL_ARRAY_BUFFER, storage->resources.skeleton_transform_buffer);
 
 				glEnableVertexAttribArray(VS::ARRAY_MAX + 0);
@@ -570,7 +571,7 @@ void RasterizerSceneGLES2::_render_geometry(RenderList::Element *p_element) {
 				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 			}
 
-			if (p_element->instance->skeleton.is_valid()) {
+			if (p_element->instance->skeleton.is_valid() && s->attribs[VS::ARRAY_BONES].enabled && s->attribs[VS::ARRAY_WEIGHTS].enabled) {
 				glBindBuffer(GL_ARRAY_BUFFER, storage->resources.skeleton_transform_buffer);
 
 				glDisableVertexAttribArray(VS::ARRAY_MAX + 0);
