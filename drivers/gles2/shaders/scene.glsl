@@ -188,12 +188,22 @@ void main() {
 
 	float alpha = 1.0;
 
+#ifdef ALPHA_SCISSOR_USED
+	float alpha_scissor = 0.5;
+#endif
+
 {
 
 FRAGMENT_SHADER_CODE
 
 
 }
+
+#ifdef ALPHA_SCISSOR_USED
+	if (alpha < alpha_scissor) {
+		discard;
+	}
+#endif
 
 	gl_FragColor = vec4(albedo, alpha);
 
