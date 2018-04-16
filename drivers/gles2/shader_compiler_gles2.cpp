@@ -554,7 +554,7 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 
 						} else if (var_node->name == "mix") {
 
-							switch (op_node->arguments[2]->get_datatype()) {
+							switch (op_node->arguments[3]->get_datatype()) {
 
 								case SL::TYPE_VEC2:
 								case SL::TYPE_BVEC2: {
@@ -577,7 +577,7 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 								} break;
 
 								default: {
-									SL::DataType type = op_node->arguments[2]->get_datatype();
+									SL::DataType type = op_node->arguments[3]->get_datatype();
 									print_line(String("uhhhh invalid mix with type: ") + itos(type));
 								} break;
 							}
