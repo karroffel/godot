@@ -613,6 +613,8 @@ void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList:
 
 void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const CameraMatrix &p_cam_projection, bool p_cam_ortogonal, InstanceBase **p_cull_result, int p_cull_count, RID *p_light_cull_result, int p_light_cull_count, RID *p_reflection_probe_cull_result, int p_reflection_probe_cull_count, RID p_environment, RID p_shadow_atlas, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass) {
 
+	glEnable(GL_BLEND);
+
 	GLuint current_fb = storage->frame.current_rt->fbo;
 
 	// render list stuff
@@ -635,8 +637,18 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 
 	glVertexAttrib4f(VS::ARRAY_COLOR, 1, 1, 1, 1);
 
+	// render opaque things first
+
+	glBlendEquation(GL_FUNC_ADD);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
 	render_list.sort_by_key(false);
 	_render_render_list(render_list.elements, render_list.element_count, p_cam_transform, p_cam_projection, 0, false, false, false, false, false);
+
+	// alpha pass
+
+	glBlendEquation(GL_FUNC_ADD);
+	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
 	render_list.sort_by_key(true);
 	_render_render_list(&render_list.elements[render_list.max_elements - render_list.alpha_element_count], render_list.alpha_element_count, p_cam_transform, p_cam_projection, 0, false, true, false, false, false);
