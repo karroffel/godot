@@ -587,6 +587,10 @@ void RasterizerSceneGLES2::_render_geometry(RenderList::Element *p_element) {
 
 void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList::Element **p_elements, int p_element_count, const Transform &p_view_transform, const CameraMatrix &p_projection, GLuint p_base_env, bool p_reverse_cull, bool p_alpha_pass, bool p_shadow, bool p_directional_add, bool p_directional_shadows) {
 
+	Vector2 screen_pixel_size;
+	screen_pixel_size.x = 1.0 / storage->frame.current_rt->width;
+	screen_pixel_size.y = 1.0 / storage->frame.current_rt->height;
+
 	for (int i = 0; i < p_element_count; i++) {
 		RenderList::Element *e = p_elements[i];
 
@@ -606,6 +610,8 @@ void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList:
 		state.scene_shader.set_uniform(SceneShaderGLES2::MODEL_MATRIX, e->instance->transform);
 
 		state.scene_shader.set_uniform(SceneShaderGLES2::TIME, storage->frame.time[0]);
+
+		state.scene_shader.set_uniform(SceneShaderGLES2::SCREEN_PIXEL_SIZE, screen_pixel_size);
 
 		_render_geometry(e);
 	}

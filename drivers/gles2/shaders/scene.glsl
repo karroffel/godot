@@ -53,6 +53,7 @@ uniform highp float time;
 
 
 
+
 //
 // varyings
 //
@@ -149,6 +150,10 @@ uniform mat4 projection_inverse_matrix;
 uniform highp float time;
 
 
+#ifdef SCREEN_UV_USED
+uniform vec2 screen_pixel_size;
+#endif
+
 //
 // varyings
 //
@@ -190,6 +195,10 @@ void main() {
 
 #ifdef ALPHA_SCISSOR_USED
 	float alpha_scissor = 0.5;
+#endif
+
+#ifdef SCREEN_UV_USED
+	vec2 screen_uv = gl_FragCoord.xy * screen_pixel_size;
 #endif
 
 {
