@@ -556,21 +556,21 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 
 							switch (op_node->arguments[3]->get_datatype()) {
 
-								case SL::TYPE_VEC2:
 								case SL::TYPE_BVEC2: {
 									code += "select2";
 								} break;
 
-								case SL::TYPE_VEC3:
 								case SL::TYPE_BVEC3: {
 									code += "select3";
 								} break;
 
-								case SL::TYPE_VEC4:
 								case SL::TYPE_BVEC4: {
 									code += "select4";
 								} break;
 
+								case SL::TYPE_VEC2:
+								case SL::TYPE_VEC3:
+								case SL::TYPE_VEC4:
 								case SL::TYPE_FLOAT: {
 
 									code += "mix";
