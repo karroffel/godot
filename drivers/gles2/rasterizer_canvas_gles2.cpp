@@ -56,6 +56,14 @@ void RasterizerCanvasGLES2::_set_uniforms() {
 	state.canvas_shader.set_uniform(CanvasShaderGLES2::FINAL_MODULATE, state.uniforms.final_modulate);
 
 	state.canvas_shader.set_uniform(CanvasShaderGLES2::TIME, storage->frame.time[0]);
+
+	if (storage->frame.current_rt) {
+		Vector2 screen_pixel_size;
+		screen_pixel_size.x = 1.0 / storage->frame.current_rt->width;
+		screen_pixel_size.y = 1.0 / storage->frame.current_rt->height;
+
+		state.canvas_shader.set_uniform(CanvasShaderGLES2::SCREEN_PIXEL_SIZE, screen_pixel_size);
+	}
 }
 
 void RasterizerCanvasGLES2::canvas_begin() {

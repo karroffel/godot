@@ -127,6 +127,10 @@ void main() {
 	vec4 color = color_interp;
 
 	color *= texture2D(color_texture, uv_interp);
+
+#ifdef SCREEN_UV_USED
+	vec2 screen_uv = gl_FragCoord.xy * screen_pixel_size;
+#endif
 {
 
 FRAGMENT_SHADER_CODE
