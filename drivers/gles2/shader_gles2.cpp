@@ -714,7 +714,7 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 	// bind uniforms
 	for (Map<StringName, ShaderLanguage::ShaderNode::Uniform>::Element *E = material->shader->uniforms.front(); E; E = E->next()) {
 
-		if (E->get().order < 0)
+		if (E->get().texture_order >= 0)
 			continue; // this is a texture, doesn't go here
 
 		Map<StringName, Variant>::Element *V = material->params.find(E->key());
@@ -913,6 +913,72 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 				case ShaderLanguage::TYPE_SAMPLERCUBE: {
 
 				} break;
+			}
+		} else {
+			if (value.second.size() == 0) {
+				// No default value set... weird, let's just use zero for everything
+				size_t default_arg_size = 1;
+				bool is_float = false;
+				switch (E->get().type) {
+					case ShaderLanguage::TYPE_BOOL:
+					case ShaderLanguage::TYPE_INT:
+					case ShaderLanguage::TYPE_UINT: {
+						default_arg_size = 1;
+					} break;
+
+					case ShaderLanguage::TYPE_FLOAT: {
+						default_arg_size = 1;
+						is_float = true;
+					} break;
+
+					case ShaderLanguage::TYPE_BVEC2:
+					case ShaderLanguage::TYPE_IVEC2:
+					case ShaderLanguage::TYPE_UVEC2: {
+						default_arg_size = 2;
+					} break;
+
+					case ShaderLanguage::TYPE_VEC2: {
+						default_arg_size = 2;
+						is_float = true;
+					} break;
+
+					case ShaderLanguage::TYPE_BVEC3:
+					case ShaderLanguage::TYPE_IVEC3:
+					case ShaderLanguage::TYPE_UVEC3: {
+						default_arg_size = 3;
+					} break;
+
+					case ShaderLanguage::TYPE_VEC3: {
+						default_arg_size = 3;
+						is_float = true;
+					} break;
+
+					case ShaderLanguage::TYPE_BVEC4:
+					case ShaderLanguage::TYPE_IVEC4:
+					case ShaderLanguage::TYPE_UVEC4: {
+						default_arg_size = 4;
+					} break;
+
+					case ShaderLanguage::TYPE_VEC4: {
+						default_arg_size = 4;
+						is_float = true;
+					} break;
+
+					default: {
+						// TODO matricies and all that stuff
+						default_arg_size = 1;
+					} break;
+				}
+
+				value.second.resize(default_arg_size);
+
+				for (int i = 0; i < default_arg_size; i++) {
+					if (is_float) {
+						value.second[i].real = 0.0;
+					} else {
+						value.second[i].uint = 0;
+					}
+				}
 			}
 		}
 
