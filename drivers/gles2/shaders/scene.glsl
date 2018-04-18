@@ -94,8 +94,6 @@ void main() {
 	uv2_interp = uv2_attrib;
 #endif
 
-	vec4 outvec = vec4(vertex_attrib, 1.0);
-
 	mat4 model_matrix_copy = model_matrix;
 
 #ifdef USE_SKELETON
@@ -120,6 +118,8 @@ void main() {
 VERTEX_SHADER_CODE
 
 }
+
+	vec4 outvec = vec4(vertex_interp, 1.0);
 
 	gl_Position = (projection_matrix * (camera_matrix * (model_matrix_copy * outvec)));
 

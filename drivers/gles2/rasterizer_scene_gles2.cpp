@@ -282,6 +282,10 @@ void RasterizerSceneGLES2::_add_geometry_with_material(RasterizerStorageGLES2::G
 	} else {
 		// TODO
 	}
+
+	if (p_material->shader->spatial.uses_time) {
+		VisualServerRaster::redraw_request();
+	}
 }
 
 void RasterizerSceneGLES2::_fill_render_list(InstanceBase **p_cull_result, int p_cull_count, bool p_depth_pass, bool p_shadow_pass) {
