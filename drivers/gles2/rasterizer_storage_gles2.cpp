@@ -2877,13 +2877,12 @@ void RasterizerStorageGLES2::initialize() {
 
 	{
 
-		int max_extensions = 0;
-		glGetIntegerv(GL_NUM_EXTENSIONS, &max_extensions);
-		for (int i = 0; i < max_extensions; i++) {
-			const GLubyte *s = glGetStringi(GL_EXTENSIONS, i);
-			if (!s)
-				break;
-			config.extensions.insert((const char *)s);
+		const GLubyte *extension_string = glGetString(GL_EXTENSIONS);
+
+		Vector<String> extensions = String((const char *)extension_string).split(" ");
+
+		for (int i = 0; i < extensions.size(); i++) {
+			config.extensions.insert(extensions[i]);
 		}
 	}
 
