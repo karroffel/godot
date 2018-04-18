@@ -494,7 +494,15 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 				// state.canvas_shader.set_uniform(CanvasShaderGLES2::MODELVIEW_MATRIX, state.uniforms.modelview_matrix);
 				state.canvas_shader.set_uniform(CanvasShaderGLES2::COLOR_TEXPIXEL_SIZE, texpixel_size);
 
+				Rect2 source = np->source;
+				if (source.size.x == 0 && source.size.y == 0) {
+					source.size.x = tex->width;
+					source.size.y = tex->height;
+				}
+
 				// prepare vertex buffer
+
+				// this buffer contains [ POS POS UV UV ] *
 
 				float buffer[16 * 2 + 16 * 2];
 
@@ -505,106 +513,106 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 					buffer[(0 * 4 * 4) + 0] = np->rect.position.x;
 					buffer[(0 * 4 * 4) + 1] = np->rect.position.y;
 
-					buffer[(0 * 4 * 4) + 2] = np->source.position.x * texpixel_size.x;
-					buffer[(0 * 4 * 4) + 3] = np->source.position.y * texpixel_size.y;
+					buffer[(0 * 4 * 4) + 2] = source.position.x * texpixel_size.x;
+					buffer[(0 * 4 * 4) + 3] = source.position.y * texpixel_size.y;
 
 					buffer[(0 * 4 * 4) + 4] = np->rect.position.x + np->margin[MARGIN_LEFT];
 					buffer[(0 * 4 * 4) + 5] = np->rect.position.y;
 
-					buffer[(0 * 4 * 4) + 6] = (np->source.position.x + np->margin[MARGIN_LEFT]) * texpixel_size.x;
-					buffer[(0 * 4 * 4) + 7] = np->source.position.y * texpixel_size.y;
+					buffer[(0 * 4 * 4) + 6] = (source.position.x + np->margin[MARGIN_LEFT]) * texpixel_size.x;
+					buffer[(0 * 4 * 4) + 7] = source.position.y * texpixel_size.y;
 
 					buffer[(0 * 4 * 4) + 8] = np->rect.position.x + np->rect.size.x - np->margin[MARGIN_RIGHT];
 					buffer[(0 * 4 * 4) + 9] = np->rect.position.y;
 
-					buffer[(0 * 4 * 4) + 10] = (np->source.position.x + np->source.size.x - np->margin[MARGIN_RIGHT]) * texpixel_size.x;
-					buffer[(0 * 4 * 4) + 11] = np->source.position.y * texpixel_size.y;
+					buffer[(0 * 4 * 4) + 10] = (source.position.x + source.size.x - np->margin[MARGIN_RIGHT]) * texpixel_size.x;
+					buffer[(0 * 4 * 4) + 11] = source.position.y * texpixel_size.y;
 
 					buffer[(0 * 4 * 4) + 12] = np->rect.position.x + np->rect.size.x;
 					buffer[(0 * 4 * 4) + 13] = np->rect.position.y;
 
-					buffer[(0 * 4 * 4) + 14] = (np->source.position.x + np->source.size.x) * texpixel_size.x;
-					buffer[(0 * 4 * 4) + 15] = np->source.position.y * texpixel_size.y;
+					buffer[(0 * 4 * 4) + 14] = (source.position.x + source.size.x) * texpixel_size.x;
+					buffer[(0 * 4 * 4) + 15] = source.position.y * texpixel_size.y;
 
 					// second row
 
 					buffer[(1 * 4 * 4) + 0] = np->rect.position.x;
 					buffer[(1 * 4 * 4) + 1] = np->rect.position.y + np->margin[MARGIN_TOP];
 
-					buffer[(1 * 4 * 4) + 2] = np->source.position.x * texpixel_size.x;
-					buffer[(1 * 4 * 4) + 3] = (np->source.position.y + np->margin[MARGIN_TOP]) * texpixel_size.y;
+					buffer[(1 * 4 * 4) + 2] = source.position.x * texpixel_size.x;
+					buffer[(1 * 4 * 4) + 3] = (source.position.y + np->margin[MARGIN_TOP]) * texpixel_size.y;
 
 					buffer[(1 * 4 * 4) + 4] = np->rect.position.x + np->margin[MARGIN_LEFT];
 					buffer[(1 * 4 * 4) + 5] = np->rect.position.y + np->margin[MARGIN_TOP];
 
-					buffer[(1 * 4 * 4) + 6] = (np->source.position.x + np->margin[MARGIN_LEFT]) * texpixel_size.x;
-					buffer[(1 * 4 * 4) + 7] = (np->source.position.y + np->margin[MARGIN_TOP]) * texpixel_size.y;
+					buffer[(1 * 4 * 4) + 6] = (source.position.x + np->margin[MARGIN_LEFT]) * texpixel_size.x;
+					buffer[(1 * 4 * 4) + 7] = (source.position.y + np->margin[MARGIN_TOP]) * texpixel_size.y;
 
 					buffer[(1 * 4 * 4) + 8] = np->rect.position.x + np->rect.size.x - np->margin[MARGIN_RIGHT];
 					buffer[(1 * 4 * 4) + 9] = np->rect.position.y + np->margin[MARGIN_TOP];
 
-					buffer[(1 * 4 * 4) + 10] = (np->source.position.x + np->source.size.x - np->margin[MARGIN_RIGHT]) * texpixel_size.x;
-					buffer[(1 * 4 * 4) + 11] = (np->source.position.y + np->margin[MARGIN_TOP]) * texpixel_size.y;
+					buffer[(1 * 4 * 4) + 10] = (source.position.x + source.size.x - np->margin[MARGIN_RIGHT]) * texpixel_size.x;
+					buffer[(1 * 4 * 4) + 11] = (source.position.y + np->margin[MARGIN_TOP]) * texpixel_size.y;
 
 					buffer[(1 * 4 * 4) + 12] = np->rect.position.x + np->rect.size.x;
 					buffer[(1 * 4 * 4) + 13] = np->rect.position.y + np->margin[MARGIN_TOP];
 
-					buffer[(1 * 4 * 4) + 14] = (np->source.position.x + np->source.size.x) * texpixel_size.x;
-					buffer[(1 * 4 * 4) + 15] = (np->source.position.y + np->margin[MARGIN_TOP]) * texpixel_size.y;
+					buffer[(1 * 4 * 4) + 14] = (source.position.x + source.size.x) * texpixel_size.x;
+					buffer[(1 * 4 * 4) + 15] = (source.position.y + np->margin[MARGIN_TOP]) * texpixel_size.y;
 
 					// thrid row
 
 					buffer[(2 * 4 * 4) + 0] = np->rect.position.x;
 					buffer[(2 * 4 * 4) + 1] = np->rect.position.y + np->rect.size.y - np->margin[MARGIN_BOTTOM];
 
-					buffer[(2 * 4 * 4) + 2] = np->source.position.x * texpixel_size.x;
-					buffer[(2 * 4 * 4) + 3] = (np->source.position.y + np->source.size.y - np->margin[MARGIN_BOTTOM]) * texpixel_size.y;
+					buffer[(2 * 4 * 4) + 2] = source.position.x * texpixel_size.x;
+					buffer[(2 * 4 * 4) + 3] = (source.position.y + source.size.y - np->margin[MARGIN_BOTTOM]) * texpixel_size.y;
 
 					buffer[(2 * 4 * 4) + 4] = np->rect.position.x + np->margin[MARGIN_LEFT];
 					buffer[(2 * 4 * 4) + 5] = np->rect.position.y + np->rect.size.y - np->margin[MARGIN_BOTTOM];
 
-					buffer[(2 * 4 * 4) + 6] = (np->source.position.x + np->margin[MARGIN_LEFT]) * texpixel_size.x;
-					buffer[(2 * 4 * 4) + 7] = (np->source.position.y + np->source.size.y - np->margin[MARGIN_BOTTOM]) * texpixel_size.y;
+					buffer[(2 * 4 * 4) + 6] = (source.position.x + np->margin[MARGIN_LEFT]) * texpixel_size.x;
+					buffer[(2 * 4 * 4) + 7] = (source.position.y + source.size.y - np->margin[MARGIN_BOTTOM]) * texpixel_size.y;
 
 					buffer[(2 * 4 * 4) + 8] = np->rect.position.x + np->rect.size.x - np->margin[MARGIN_RIGHT];
 					buffer[(2 * 4 * 4) + 9] = np->rect.position.y + np->rect.size.y - np->margin[MARGIN_BOTTOM];
 
-					buffer[(2 * 4 * 4) + 10] = (np->source.position.x + np->source.size.x - np->margin[MARGIN_RIGHT]) * texpixel_size.x;
-					buffer[(2 * 4 * 4) + 11] = (np->source.position.y + np->source.size.y - np->margin[MARGIN_BOTTOM]) * texpixel_size.y;
+					buffer[(2 * 4 * 4) + 10] = (source.position.x + source.size.x - np->margin[MARGIN_RIGHT]) * texpixel_size.x;
+					buffer[(2 * 4 * 4) + 11] = (source.position.y + source.size.y - np->margin[MARGIN_BOTTOM]) * texpixel_size.y;
 
 					buffer[(2 * 4 * 4) + 12] = np->rect.position.x + np->rect.size.x;
 					buffer[(2 * 4 * 4) + 13] = np->rect.position.y + np->rect.size.y - np->margin[MARGIN_BOTTOM];
 
-					buffer[(2 * 4 * 4) + 14] = (np->source.position.x + np->source.size.x) * texpixel_size.x;
-					buffer[(2 * 4 * 4) + 15] = (np->source.position.y + np->source.size.y - np->margin[MARGIN_BOTTOM]) * texpixel_size.y;
+					buffer[(2 * 4 * 4) + 14] = (source.position.x + source.size.x) * texpixel_size.x;
+					buffer[(2 * 4 * 4) + 15] = (source.position.y + source.size.y - np->margin[MARGIN_BOTTOM]) * texpixel_size.y;
 
 					// fourth row
 
 					buffer[(3 * 4 * 4) + 0] = np->rect.position.x;
 					buffer[(3 * 4 * 4) + 1] = np->rect.position.y + np->rect.size.y;
 
-					buffer[(3 * 4 * 4) + 2] = np->source.position.x * texpixel_size.x;
-					buffer[(3 * 4 * 4) + 3] = (np->source.position.y + np->source.size.y) * texpixel_size.y;
+					buffer[(3 * 4 * 4) + 2] = source.position.x * texpixel_size.x;
+					buffer[(3 * 4 * 4) + 3] = (source.position.y + source.size.y) * texpixel_size.y;
 
 					buffer[(3 * 4 * 4) + 4] = np->rect.position.x + np->margin[MARGIN_LEFT];
 					buffer[(3 * 4 * 4) + 5] = np->rect.position.y + np->rect.size.y;
 
-					buffer[(3 * 4 * 4) + 6] = (np->source.position.x + np->margin[MARGIN_LEFT]) * texpixel_size.x;
-					buffer[(3 * 4 * 4) + 7] = (np->source.position.y + np->source.size.y) * texpixel_size.y;
+					buffer[(3 * 4 * 4) + 6] = (source.position.x + np->margin[MARGIN_LEFT]) * texpixel_size.x;
+					buffer[(3 * 4 * 4) + 7] = (source.position.y + source.size.y) * texpixel_size.y;
 
 					buffer[(3 * 4 * 4) + 8] = np->rect.position.x + np->rect.size.x - np->margin[MARGIN_RIGHT];
 					buffer[(3 * 4 * 4) + 9] = np->rect.position.y + np->rect.size.y;
 
-					buffer[(3 * 4 * 4) + 10] = (np->source.position.x + np->source.size.x - np->margin[MARGIN_RIGHT]) * texpixel_size.x;
-					buffer[(3 * 4 * 4) + 11] = (np->source.position.y + np->source.size.y) * texpixel_size.y;
+					buffer[(3 * 4 * 4) + 10] = (source.position.x + source.size.x - np->margin[MARGIN_RIGHT]) * texpixel_size.x;
+					buffer[(3 * 4 * 4) + 11] = (source.position.y + source.size.y) * texpixel_size.y;
 
 					buffer[(3 * 4 * 4) + 12] = np->rect.position.x + np->rect.size.x;
 					buffer[(3 * 4 * 4) + 13] = np->rect.position.y + np->rect.size.y;
 
-					buffer[(3 * 4 * 4) + 14] = (np->source.position.x + np->source.size.x) * texpixel_size.x;
-					buffer[(3 * 4 * 4) + 15] = (np->source.position.y + np->source.size.y) * texpixel_size.y;
+					buffer[(3 * 4 * 4) + 14] = (source.position.x + source.size.x) * texpixel_size.x;
+					buffer[(3 * 4 * 4) + 15] = (source.position.y + source.size.y) * texpixel_size.y;
 
-					// print_line(String::num((np->source.position.y + np->source.size.y) * texpixel_size.y));
+					// print_line(String::num((source.position.y + source.size.y) * texpixel_size.y));
 				}
 
 				glBindBuffer(GL_ARRAY_BUFFER, data.ninepatch_vertices);
