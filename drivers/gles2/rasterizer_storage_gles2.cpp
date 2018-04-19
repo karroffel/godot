@@ -353,6 +353,8 @@ void RasterizerStorageGLES2::texture_allocate(RID p_texture, int p_width, int p_
 	texture->data_size = 0;
 	texture->mipmaps = 1;
 
+	texture->compressed = compressed;
+
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(texture->target, texture->tex_id);
 
@@ -471,11 +473,21 @@ void RasterizerStorageGLES2::texture_set_data(RID p_texture, const Ref<Image> &p
 		int size, ofs;
 		img->get_mipmap_offset_and_size(i, ofs, size);
 
-		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-		if (texture->flags & VS::TEXTURE_FLAG_USED_FOR_STREAMING) {
-			glTexSubImage2D(blit_target, i, 0, 0, w, h, format, type, &read[ofs]);
+		if (texture->compressed) {
+			glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+
+			int bw = w;
+			int bh = h;
+
+			glCompressedTexImage2D(blit_target, i, internal_format, bw, bh, 0, size, &read[ofs]);
 		} else {
-			glTexImage2D(blit_target, i, internal_format, w, h, 0, format, type, &read[ofs]);
+
+			glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+			if (texture->flags & VS::TEXTURE_FLAG_USED_FOR_STREAMING) {
+				glTexSubImage2D(blit_target, i, 0, 0, w, h, format, type, &read[ofs]);
+			} else {
+				glTexImage2D(blit_target, i, internal_format, w, h, 0, format, type, &read[ofs]);
+			}
 		}
 
 		tsize += size;
@@ -2768,6 +2780,7 @@ RID RasterizerStorageGLES2::render_target_create() {
 	t->data_size = 0;
 	t->total_data_size = 0;
 	t->ignore_mipmaps = false;
+	t->compressed = false;
 	t->mipmaps = 1;
 	t->active = true;
 	t->tex_id = 0;

@@ -239,6 +239,8 @@ public:
 		int total_data_size;
 		bool ignore_mipmaps;
 
+		bool compressed;
+
 		int mipmaps;
 
 		bool active;
@@ -265,6 +267,8 @@ public:
 			data_size = 0;
 			total_data_size = 0;
 			ignore_mipmaps = false;
+
+			compressed = false;
 
 			active = false;
 
