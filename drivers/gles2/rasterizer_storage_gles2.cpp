@@ -40,10 +40,15 @@ GLuint RasterizerStorageGLES2::system_fbo = 0;
 
 /* TEXTURE API */
 
-Ref<Image> RasterizerStorageGLES2::_get_gl_image_and_format(const Ref<Image> &p_image, Image::Format p_format, uint32_t p_flags, GLenum &r_gl_format, GLenum &r_gl_internal_format, GLenum &r_gl_type) {
+#define _EXT_COMPRESSED_RGBA_S3TC_DXT1_EXT 0x83F1
+#define _EXT_COMPRESSED_RGBA_S3TC_DXT3_EXT 0x83F2
+#define _EXT_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
+
+Ref<Image> RasterizerStorageGLES2::_get_gl_image_and_format(const Ref<Image> &p_image, Image::Format p_format, uint32_t p_flags, GLenum &r_gl_format, GLenum &r_gl_internal_format, GLenum &r_gl_type, bool &r_compressed) {
 
 	r_gl_format = 0;
 	Ref<Image> image = p_image;
+	r_compressed = false;
 
 	bool need_decompress = false;
 
@@ -166,17 +171,38 @@ Ref<Image> RasterizerStorageGLES2::_get_gl_image_and_format(const Ref<Image> &p_
 		} break;
 		case Image::FORMAT_DXT1: {
 
-			need_decompress = true;
+			if (config.s3tc_supported) {
+				r_gl_internal_format = _EXT_COMPRESSED_RGBA_S3TC_DXT1_EXT;
+				r_gl_format = GL_RGBA;
+				r_gl_type = GL_UNSIGNED_BYTE;
+				r_compressed = true;
+			} else {
+				need_decompress = true;
+			}
 
 		} break;
 		case Image::FORMAT_DXT3: {
 
-			need_decompress = true;
+			if (config.s3tc_supported) {
+				r_gl_internal_format = _EXT_COMPRESSED_RGBA_S3TC_DXT3_EXT;
+				r_gl_format = GL_RGBA;
+				r_gl_type = GL_UNSIGNED_BYTE;
+				r_compressed = true;
+			} else {
+				need_decompress = true;
+			}
 
 		} break;
 		case Image::FORMAT_DXT5: {
 
-			need_decompress = true;
+			if (config.s3tc_supported) {
+				r_gl_internal_format = _EXT_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+				r_gl_format = GL_RGBA;
+				r_gl_type = GL_UNSIGNED_BYTE;
+				r_compressed = true;
+			} else {
+				need_decompress = true;
+			}
 
 		} break;
 		case Image::FORMAT_RGTC_R: {
@@ -301,6 +327,8 @@ void RasterizerStorageGLES2::texture_allocate(RID p_texture, int p_width, int p_
 	GLenum internal_format;
 	GLenum type;
 
+	bool compressed = false;
+
 	if (p_flags & VS::TEXTURE_FLAG_USED_FOR_STREAMING) {
 		p_flags &= ~VS::TEXTURE_FLAG_MIPMAPS; // no mipies for video
 	}
@@ -314,7 +342,7 @@ void RasterizerStorageGLES2::texture_allocate(RID p_texture, int p_width, int p_
 	texture->stored_cube_sides = 0;
 	texture->target = (p_flags & VS::TEXTURE_FLAG_CUBEMAP) ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D;
 
-	_get_gl_image_and_format(Ref<Image>(), texture->format, texture->flags, format, internal_format, type);
+	_get_gl_image_and_format(Ref<Image>(), texture->format, texture->flags, format, internal_format, type, compressed);
 
 	texture->alloc_width = texture->width;
 	texture->alloc_height = texture->height;
@@ -349,13 +377,12 @@ void RasterizerStorageGLES2::texture_set_data(RID p_texture, const Ref<Image> &p
 	GLenum format;
 	GLenum internal_format;
 	bool compressed = false;
-	bool srgb;
 
 	if (config.keep_original_textures && !(texture->flags & VS::TEXTURE_FLAG_USED_FOR_STREAMING)) {
 		texture->images[p_cube_side] = p_image;
 	}
 
-	Ref<Image> img = _get_gl_image_and_format(p_image, p_image->get_format(), texture->flags, format, internal_format, type);
+	Ref<Image> img = _get_gl_image_and_format(p_image, p_image->get_format(), texture->flags, format, internal_format, type, compressed);
 
 	if (config.shrink_textures_x2 && (p_image->has_mipmaps() || !p_image->is_compressed()) && !(texture->flags & VS::TEXTURE_FLAG_USED_FOR_STREAMING)) {
 
@@ -2888,6 +2915,7 @@ void RasterizerStorageGLES2::initialize() {
 
 	config.shrink_textures_x2 = false;
 	config.float_texture_supported = config.extensions.find("GL_ARB_texture_float") != NULL || config.extensions.find("GL_OES_texture_float") != NULL;
+	config.s3tc_supported = config.extensions.find("GL_EXT_texture_compression_s3tc") != NULL;
 
 	print_line(config.float_texture_supported ? "float true" : "float false");
 
