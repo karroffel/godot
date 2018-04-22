@@ -62,6 +62,9 @@
 #include "scene/main/viewport.h"
 #include "scene/resources/packed_scene.h"
 
+#include "ecs/main/ecs_world.h"
+#include "ecs/register_ecs_types.h"
+
 #ifdef TOOLS_ENABLED
 #include "editor/doc/doc_data.h"
 #include "editor/doc/doc_data_class_path.gen.h"
@@ -122,6 +125,7 @@ static bool force_lowdpi = false;
 static int init_screen = -1;
 static bool use_vsync = true;
 static bool editor = false;
+static bool ecs_main_loop = false;
 static bool show_help = false;
 static bool disable_render_loop = false;
 static int fixed_fps = -1;
@@ -1155,6 +1159,7 @@ Error Main::setup2(Thread::ID p_main_tid_override) {
 	MAIN_PRINT("Main: Load Scene Types");
 
 	register_scene_types();
+	register_ecs_types();
 
 	GLOBAL_DEF("display/mouse_cursor/custom_image", String());
 	GLOBAL_DEF("display/mouse_cursor/custom_image_hotspot", Vector2());
@@ -1244,6 +1249,8 @@ bool Main::start() {
 		//parameters that do not have an argument to the right
 		if (args[i] == "--no-docbase") {
 			doc_base = false;
+		} else if (args[i] == "--ecs") {
+			ecs_main_loop = true;
 #ifdef TOOLS_ENABLED
 		} else if (args[i] == "-e" || args[i] == "--editor") {
 			editor = true;
@@ -1361,6 +1368,11 @@ bool Main::start() {
 	}
 
 	MainLoop *main_loop = NULL;
+
+	if (ecs_main_loop) {
+		main_loop = memnew(EcsWorld);
+	}
+
 	if (editor) {
 		main_loop = memnew(SceneTree);
 	};
@@ -1924,6 +1936,8 @@ void Main::cleanup() {
 	unregister_driver_types();
 	unregister_module_types();
 	unregister_platform_apis();
+
+	unregister_ecs_types();
 	unregister_scene_types();
 	unregister_server_types();
 
