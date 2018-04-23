@@ -8,8 +8,6 @@ void EcsWorld::input_text(const String &p_text) {
 
 void EcsWorld::init() {
 	print_line("Hello from EcsWorld!!");
-
-	register_component_type("speed", sizeof(float));
 }
 
 bool EcsWorld::iteration(float p_time) {
@@ -19,15 +17,6 @@ bool EcsWorld::iteration(float p_time) {
 bool EcsWorld::idle(float p_time) {
 
 	frame++;
-
-	Entity e = create_entity();
-
-	ERR_FAIL_COND_V(!is_entity_alive(e), true);
-
-	printf("entity: %d, %d\n", e.id, e.generation);
-	fflush(stdout);
-
-	destroy_entity(e);
 
 	return _quit;
 }
@@ -65,27 +54,54 @@ bool EcsWorld::is_entity_alive(Entity p_entity) {
 	return entity_generation[p_entity.id] == p_entity.generation;
 }
 
-ComponentHandle EcsWorld::register_component_type(const StringName &p_name,
-		size_t p_size,
-		EcsWorld::ComponentStorageType p_storage_type) {
+ComponentHandle EcsWorld::register_component_type(const StringName &p_name, size_t p_size) {
+
 	ComponentHandle handle = component_last_handle;
 	component_names[p_name] = handle;
-	component_sizes.set(handle, p_size);
 
 	component_last_handle += 1;
+
+	components[handle].size_of_individual_component = p_size;
 
 	return handle;
 }
 
 void *EcsWorld::add_component(Entity p_entity, ComponentHandle p_component) {
-	return NULL;
+
+	ComponentStorage &comp_storage = components[p_component];
+
+	uint32_t idx = 0;
+	bool entity_has_component = comp_storage.component_index.lookup(p_entity.id, &idx);
+	if (!entity_has_component) {
+		uint32_t number_components = comp_storage.component_data.size() / comp_storage.size_of_individual_component;
+
+		comp_storage.component_data.resize(comp_storage.component_data.size() + comp_storage.size_of_individual_component);
+
+		idx = number_components;
+		comp_storage.component_index.set(p_entity.id, idx);
+	}
+
+	return (void *)&comp_storage.component_data[idx * comp_storage.size_of_individual_component];
 }
 
 void *EcsWorld::get_component(Entity p_entity, ComponentHandle p_component) {
-	return NULL;
+
+	ComponentStorage &comp_storage = components[p_component];
+
+	uint32_t idx = 0;
+	bool entity_has_component = comp_storage.component_index.lookup(p_entity.id, &idx);
+	if (!entity_has_component) {
+		return NULL;
+	}
+
+	return (void *)&comp_storage.component_data[idx * comp_storage.size_of_individual_component];
 }
 
 void EcsWorld::remove_component(Entity p_entity, ComponentHandle p_component) {
+
+	ComponentStorage &comp_storage = components[p_component];
+
+	comp_storage.component_index.remove(p_entity.id);
 }
 
 EcsWorld::EcsWorld() {

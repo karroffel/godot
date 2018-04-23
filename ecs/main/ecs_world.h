@@ -5,13 +5,21 @@
 
 #include "entity.h"
 
+#include "hash_map.h"
 #include "oa_hash_map.h"
+#include "vector.h"
 
 typedef uint32_t EntityIndex;
 typedef uint16_t EntityGeneration;
 typedef uint32_t ComponentHandle;
 
 #define MINIMUM_FREE_ENTITIES 1024
+
+struct ComponentStorage {
+	size_t size_of_individual_component;
+	OAHashMap<EntityIndex, uint32_t> component_index;
+	Vector<uint8_t> component_data;
+};
 
 class EcsWorld : public MainLoop {
 
@@ -30,7 +38,7 @@ class EcsWorld : public MainLoop {
 
 	ComponentHandle component_last_handle = 0;
 	HashMap<StringName, ComponentHandle> component_names;
-	OAHashMap<ComponentHandle, size_t> component_sizes;
+	HashMap<ComponentHandle, ComponentStorage> components;
 
 public:
 	// MainLoop stuff
@@ -48,15 +56,7 @@ public:
 
 	// dealing with components
 
-	enum ComponentStorageType {
-		COMPONENT_STORAGE_HASHMAP,
-
-		COMPONENT_STORAGE_MAX
-	};
-
-	ComponentHandle register_component_type(const StringName &p_name,
-			size_t p_size,
-			ComponentStorageType p_storage_type = COMPONENT_STORAGE_HASHMAP);
+	ComponentHandle register_component_type(const StringName &p_name, size_t p_size);
 
 	void *add_component(Entity p_entity, ComponentHandle p_component);
 
