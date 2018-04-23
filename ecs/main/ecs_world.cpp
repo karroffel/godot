@@ -6,8 +6,25 @@ void EcsWorld::input_event(const Ref<InputEvent> &p_event) {
 void EcsWorld::input_text(const String &p_text) {
 }
 
+struct Speed {
+	float speed;
+};
+
 void EcsWorld::init() {
 	print_line("Hello from EcsWorld!!");
+
+	register_component_type<Speed>();
+
+	Entity e = create_entity();
+
+	Speed *speed = add_component<Speed>(e);
+
+	speed->speed = 42;
+
+	printf("speed is %f\n", get_component<Speed>(e)->speed);
+	fflush(stdout);
+
+	destroy_entity(e);
 }
 
 bool EcsWorld::iteration(float p_time) {
@@ -18,11 +35,21 @@ bool EcsWorld::idle(float p_time) {
 
 	frame++;
 
+	for (int i = 0; i < systems.size(); i++) {
+		// TODO create entity streams that match the system
+
+		systems[i]->run();
+	}
+
 	return _quit;
 }
 
 void EcsWorld::finish() {
 	print_line("Goodbye from EcsWorld!!");
+
+	for (int i = systems.size() - 1; i >= 0; i--) {
+		systems[i]->finish();
+	}
 }
 
 void EcsWorld::quit() {
@@ -102,6 +129,18 @@ void EcsWorld::remove_component(Entity p_entity, ComponentHandle p_component) {
 	ComponentStorage &comp_storage = components[p_component];
 
 	comp_storage.component_index.remove(p_entity.id);
+}
+
+SystemHandle EcsWorld::register_system(const StringName &p_system_name, System *p_system) {
+
+	SystemHandle handle = systems.size();
+
+	system_names.push_back(p_system_name);
+	systems.push_back(p_system);
+
+	p_system->init();
+
+	return handle;
 }
 
 EcsWorld::EcsWorld() {

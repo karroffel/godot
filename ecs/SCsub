@@ -7,8 +7,13 @@ env.ecs_sources = []
 env.add_source_files(env.ecs_sources, "*.cpp")
 
 SConscript('main/SCsub')
+SConscript('components/SCsub')
+SConscript('systems/SCsub')
 
-lib = env.add_library("ecs", env.ecs_sources)
+ecs_env = env.Clone()
+ecs_env.Append(CCFLAGS=['-std=c++11'])
+
+lib = ecs_env.add_library("ecs", env.ecs_sources)
 env.Prepend(LIBS=[lib])
 
 Export('env')
