@@ -606,6 +606,48 @@ void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList:
 
 		_setup_material(material);
 
+		if (p_alpha_pass || p_directional_add) {
+			int desired_blend_mode;
+			if (p_directional_add) {
+				desired_blend_mode = RasterizerStorageGLES2::Shader::Spatial::BLEND_MODE_ADD;
+			} else {
+				desired_blend_mode = material->shader->spatial.blend_mode;
+			}
+
+			switch (desired_blend_mode) {
+
+				case RasterizerStorageGLES2::Shader::Spatial::BLEND_MODE_MIX: {
+					glBlendEquation(GL_FUNC_ADD);
+					if (storage->frame.current_rt && storage->frame.current_rt->flags[RasterizerStorage::RENDER_TARGET_TRANSPARENT]) {
+						glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+					} else {
+						glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+					}
+
+				} break;
+				case RasterizerStorageGLES2::Shader::Spatial::BLEND_MODE_ADD: {
+
+					glBlendEquation(GL_FUNC_ADD);
+					glBlendFunc(p_alpha_pass ? GL_SRC_ALPHA : GL_ONE, GL_ONE);
+
+				} break;
+				case RasterizerStorageGLES2::Shader::Spatial::BLEND_MODE_SUB: {
+
+					glBlendEquation(GL_FUNC_REVERSE_SUBTRACT);
+					glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+				} break;
+				case RasterizerStorageGLES2::Shader::Spatial::BLEND_MODE_MUL: {
+					glBlendEquation(GL_FUNC_ADD);
+					if (storage->frame.current_rt && storage->frame.current_rt->flags[RasterizerStorage::RENDER_TARGET_TRANSPARENT]) {
+						glBlendFuncSeparate(GL_DST_COLOR, GL_ZERO, GL_DST_ALPHA, GL_ZERO);
+					} else {
+						glBlendFuncSeparate(GL_DST_COLOR, GL_ZERO, GL_ZERO, GL_ONE);
+					}
+
+				} break;
+			}
+		}
+
 		state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_MATRIX, p_view_transform.inverse());
 		state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_INVERSE_MATRIX, p_view_transform);
 		state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_MATRIX, p_projection);
