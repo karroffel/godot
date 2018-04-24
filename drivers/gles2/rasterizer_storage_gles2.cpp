@@ -44,6 +44,8 @@ GLuint RasterizerStorageGLES2::system_fbo = 0;
 #define _EXT_COMPRESSED_RGBA_S3TC_DXT3_EXT 0x83F2
 #define _EXT_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
 
+#define _EXT_ETC1_RGB8_OES 0x8D64
+
 Ref<Image> RasterizerStorageGLES2::_get_gl_image_and_format(const Ref<Image> &p_image, Image::Format p_format, uint32_t p_flags, GLenum &r_gl_format, GLenum &r_gl_internal_format, GLenum &r_gl_type, bool &r_compressed) {
 
 	r_gl_format = 0;
@@ -171,11 +173,11 @@ Ref<Image> RasterizerStorageGLES2::_get_gl_image_and_format(const Ref<Image> &p_
 		} break;
 		case Image::FORMAT_DXT1: {
 
+			r_compressed = true;
 			if (config.s3tc_supported) {
 				r_gl_internal_format = _EXT_COMPRESSED_RGBA_S3TC_DXT1_EXT;
 				r_gl_format = GL_RGBA;
 				r_gl_type = GL_UNSIGNED_BYTE;
-				r_compressed = true;
 			} else {
 				need_decompress = true;
 			}
@@ -245,7 +247,14 @@ Ref<Image> RasterizerStorageGLES2::_get_gl_image_and_format(const Ref<Image> &p_
 		} break;
 		case Image::FORMAT_ETC: {
 
-			need_decompress = true;
+			if (config.etc1_supported) {
+				r_gl_internal_format = _EXT_ETC1_RGB8_OES;
+				r_gl_format = GL_RGBA;
+				r_gl_type = GL_UNSIGNED_BYTE;
+				r_compressed = true;
+			} else {
+				need_decompress = true;
+			}
 		} break;
 		case Image::FORMAT_ETC2_R11: {
 
@@ -507,6 +516,9 @@ void RasterizerStorageGLES2::texture_set_data(RID p_texture, const Ref<Image> &p
 	if ((texture->flags & VS::TEXTURE_FLAG_MIPMAPS) && mipmaps == 1 && !texture->ignore_mipmaps && (!(texture->flags & VS::TEXTURE_FLAG_CUBEMAP) || texture->stored_cube_sides == (1 << 6) - 1)) {
 		//generate mipmaps if they were requested and the image does not contain them
 		glGenerateMipmap(texture->target);
+	} else if (mipmaps > 1) {
+		glTexParameteri(texture->target, GL_TEXTURE_BASE_LEVEL, 0);
+		glTexParameteri(texture->target, GL_TEXTURE_MAX_LEVEL, mipmaps - 1);
 	}
 
 	texture->mipmaps = mipmaps;
@@ -2889,6 +2901,13 @@ bool RasterizerStorageGLES2::free(RID p_rid) {
 }
 
 bool RasterizerStorageGLES2::has_os_feature(const String &p_feature) const {
+
+	if (p_feature == "s3tc")
+		return config.s3tc_supported;
+
+	if (p_feature == "etc")
+		return config.etc1_supported;
+
 	return false;
 }
 
@@ -2929,6 +2948,7 @@ void RasterizerStorageGLES2::initialize() {
 	config.shrink_textures_x2 = false;
 	config.float_texture_supported = config.extensions.find("GL_ARB_texture_float") != NULL || config.extensions.find("GL_OES_texture_float") != NULL;
 	config.s3tc_supported = config.extensions.find("GL_EXT_texture_compression_s3tc") != NULL;
+	config.etc1_supported = config.extensions.has("GL_OES_compressed_ETC1_RGB8_texture") != NULL;
 
 	print_line(config.float_texture_supported ? "float true" : "float false");
 
