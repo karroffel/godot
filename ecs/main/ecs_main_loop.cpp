@@ -5,6 +5,8 @@ struct Position {
 	float y;
 };
 
+struct TestTag {};
+
 class TestState : public State {
 
 	Entity a;
@@ -12,8 +14,11 @@ class TestState : public State {
 	// State interface
 public:
 	virtual void on_start(EcsWorld *p_world) {
+		p_world->register_tag<TestTag>();
+
 		a = p_world->create_entity();
 		p_world->add_component_with_data(a, Position{ 0.0, 1337.42 });
+		p_world->add_tag<TestTag>(a);
 	}
 	virtual Transition handle_notification(EcsWorld *p_world, int p_notification) {
 		switch (p_notification) {

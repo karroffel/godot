@@ -19,6 +19,8 @@ typedef uint16_t EntityGeneration;
 
 typedef uint32_t ComponentHandle;
 
+typedef uint32_t TagHandle;
+
 typedef uint32_t ResourceHandle;
 
 typedef uint32_t SystemHandle;
@@ -62,6 +64,9 @@ class EcsWorld {
 	HashMap<StringName, ResourceHandle> resource_names;
 
 	// tag stuff
+	HashMap<StringName, TagHandle> tag_names;
+	OAHashMap<size_t, TagHandle> tag_handles;
+	Vector<Set<EntityIndex> > tags;
 
 	// system stuff
 
@@ -168,6 +173,41 @@ public:
 		get_resource<T>() = p_resource_data;
 	}
 
+	// dealing with tags
+	TagHandle register_tag(const StringName &p_tag_name);
+	void add_tag(Entity p_entity, TagHandle p_tag);
+	void remove_tag(Entity p_entity, TagHandle p_tag);
+	bool has_tag(Entity p_entity, TagHandle p_tag);
+
+	template <class T>
+	_FORCE_INLINE_ void register_tag() {
+		TagHandle handle = register_tag(StringName(typeid(T).name()));
+		tag_handles.set(typeid(T).hash_code(), handle);
+	}
+
+	template <class T>
+	_FORCE_INLINE_ void add_tag(Entity p_entity) {
+		TagHandle handle = 0;
+		tag_handles.lookup(typeid(T).hash_code(), &handle);
+
+		add_tag(p_entity, handle);
+	}
+
+	template <class T>
+	_FORCE_INLINE_ void remove_tag(Entity p_entity) {
+		TagHandle handle = 0;
+		tag_handles.lookup(typeid(T).hash_code(), &handle);
+
+		remove_tag(p_entity, handle);
+	}
+
+	template <class T>
+	_FORCE_INLINE_ bool has_tag(Entity p_entity) {
+		TagHandle handle = 0;
+		tag_handles.lookup(typeid(T).hash_code(), &handle);
+
+		return has_tag(p_entity, handle);
+	}
 	// dealing with systems
 
 	SystemHandle register_system(const StringName &p_system_name, System *p_system);

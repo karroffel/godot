@@ -136,6 +136,27 @@ void *EcsWorld::get_resource(ResourceHandle p_resource) {
 	return (void *)&resource_data[p_resource];
 }
 
+TagHandle EcsWorld::register_tag(const StringName &p_tag_name) {
+	TagHandle handle = tags.size();
+
+	tag_names[p_tag_name] = handle;
+	tags.push_back(Set<EntityIndex>());
+
+	return handle;
+}
+
+void EcsWorld::add_tag(Entity p_entity, TagHandle p_tag) {
+	tags[p_tag].insert(p_entity.id);
+}
+
+void EcsWorld::remove_tag(Entity p_entity, TagHandle p_tag) {
+	tags[p_tag].erase(p_entity.id);
+}
+
+bool EcsWorld::has_tag(Entity p_entity, TagHandle p_tag) {
+	return tags[p_tag].has(p_entity.id);
+}
+
 SystemHandle EcsWorld::register_system(const StringName &p_system_name, System *p_system) {
 
 	SystemHandle handle = systems.size();
