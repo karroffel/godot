@@ -1,13 +1,15 @@
 #ifndef ECS_WORLD_H
 #define ECS_WORLD_H
 
-#include "os/main_loop.h"
-
 #include "entity.h"
 
 #include "hash_map.h"
 #include "oa_hash_map.h"
 #include "vector.h"
+
+#include "os/input_event.h"
+
+#include "state_machine.h"
 
 #include <typeinfo>
 
@@ -20,9 +22,10 @@ typedef uint32_t SystemHandle;
 
 class System {
 public:
-	virtual void init() = 0;
-	virtual void run() = 0;
-	virtual void finish() = 0;
+	virtual void init() {}
+	virtual void update() = 0;
+	virtual void fixed_update() {}
+	virtual void finish() {}
 };
 
 #define MINIMUM_FREE_ENTITIES 1024
@@ -33,13 +36,9 @@ struct ComponentStorage {
 	Vector<uint8_t> component_data;
 };
 
-class EcsWorld : public MainLoop {
-
-	GDCLASS(EcsWorld, MainLoop)
+class EcsWorld {
 
 	bool _quit = false;
-
-	uint64_t frame = 0;
 
 	// entity stuff
 
@@ -50,7 +49,7 @@ class EcsWorld : public MainLoop {
 
 	ComponentHandle component_last_handle = 0;
 	HashMap<StringName, ComponentHandle> component_names;
-	HashMap<ComponentHandle, ComponentStorage> components;
+	Vector<ComponentStorage> components;
 	OAHashMap<size_t, ComponentHandle> component_handles;
 
 	// resource stuff
@@ -58,17 +57,29 @@ class EcsWorld : public MainLoop {
 	// tag stuff
 
 	// system stuff
+
 	Vector<StringName> system_names;
 	Vector<System *> systems;
 
+	// state stuff
+
+	StateMachine state;
+
 public:
-	// MainLoop stuff
-	virtual void input_event(const Ref<InputEvent> &p_event);
-	virtual void input_text(const String &p_text);
-	virtual void init();
-	virtual bool iteration(float p_time);
-	virtual bool idle(float p_time);
-	virtual void finish();
+	void handle_event(const Ref<InputEvent> &p_event);
+	void handle_notification(int p_notification);
+	void on_start();
+	void fixed_update(float p_time);
+	void update(float p_time);
+	void on_stop();
+
+	_FORCE_INLINE_ bool requested_quit() {
+		return _quit;
+	}
+
+	_FORCE_INLINE_ void quit() {
+		_quit = true;
+	}
 
 	// dealing with entities
 	Entity create_entity();
@@ -128,7 +139,9 @@ public:
 
 	SystemHandle register_system(const StringName &p_system_name, System *p_system);
 
-	void quit();
+	// dealing with states
+
+	void set_initial_state(State *p_state);
 
 	EcsWorld();
 	~EcsWorld();

@@ -62,7 +62,7 @@
 #include "scene/main/viewport.h"
 #include "scene/resources/packed_scene.h"
 
-#include "ecs/main/ecs_world.h"
+#include "ecs/main/ecs_main_loop.h"
 #include "ecs/register_ecs_types.h"
 
 #ifdef TOOLS_ENABLED
@@ -1370,7 +1370,7 @@ bool Main::start() {
 	MainLoop *main_loop = NULL;
 
 	if (ecs_main_loop) {
-		main_loop = memnew(EcsWorld);
+		main_loop = memnew(EcsMainLoop);
 	}
 
 	if (editor) {

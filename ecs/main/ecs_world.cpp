@@ -1,59 +1,42 @@
 #include "ecs_world.h"
 
-void EcsWorld::input_event(const Ref<InputEvent> &p_event) {
+void EcsWorld::handle_event(const Ref<InputEvent> &p_event) {
+	state.handle_event(this, p_event);
 }
 
-void EcsWorld::input_text(const String &p_text) {
+void EcsWorld::handle_notification(int p_notification) {
+	state.handle_notification(this, p_notification);
 }
 
-struct Speed {
-	float speed;
-};
-
-void EcsWorld::init() {
-	print_line("Hello from EcsWorld!!");
-
-	register_component_type<Speed>();
-
-	Entity e = create_entity();
-
-	Speed *speed = add_component<Speed>(e);
-
-	speed->speed = 42;
-
-	printf("speed is %f\n", get_component<Speed>(e)->speed);
-	fflush(stdout);
-
-	destroy_entity(e);
+void EcsWorld::on_start() {
 }
 
-bool EcsWorld::iteration(float p_time) {
-	return _quit;
+void EcsWorld::fixed_update(float p_time) {
+
+	// TODO run fixed update on systems
+
+	state.fixed_update(this);
 }
 
-bool EcsWorld::idle(float p_time) {
-
-	frame++;
+void EcsWorld::update(float p_time) {
 
 	for (int i = 0; i < systems.size(); i++) {
 		// TODO create entity streams that match the system
 
-		systems[i]->run();
+		systems[i]->update();
 	}
 
-	return _quit;
+	state.update(this);
 }
 
-void EcsWorld::finish() {
+void EcsWorld::on_stop() {
 	print_line("Goodbye from EcsWorld!!");
+
+	state.on_stop(this);
 
 	for (int i = systems.size() - 1; i >= 0; i--) {
 		systems[i]->finish();
 	}
-}
-
-void EcsWorld::quit() {
-	_quit = true;
 }
 
 Entity EcsWorld::create_entity() {
@@ -88,6 +71,7 @@ ComponentHandle EcsWorld::register_component_type(const StringName &p_name, size
 
 	component_last_handle += 1;
 
+	components.resize(components.size() + 1);
 	components[handle].size_of_individual_component = p_size;
 
 	return handle;
@@ -118,7 +102,7 @@ void *EcsWorld::get_component(Entity p_entity, ComponentHandle p_component) {
 	uint32_t idx = 0;
 	bool entity_has_component = comp_storage.component_index.lookup(p_entity.id, &idx);
 	if (!entity_has_component) {
-		return NULL;
+		return nullptr;
 	}
 
 	return (void *)&comp_storage.component_data[idx * comp_storage.size_of_individual_component];
@@ -141,6 +125,10 @@ SystemHandle EcsWorld::register_system(const StringName &p_system_name, System *
 	p_system->init();
 
 	return handle;
+}
+
+void EcsWorld::set_initial_state(State *p_state) {
+	state.push_state(this, p_state);
 }
 
 EcsWorld::EcsWorld() {
