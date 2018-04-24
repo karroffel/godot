@@ -59,7 +59,7 @@ public:
 class StateMachine {
 
 	Vector<State *> states;
-	State *current_state;
+	State *current_state = nullptr;
 
 	void handle_transition(EcsWorld *p_world, Transition p_transition);
 

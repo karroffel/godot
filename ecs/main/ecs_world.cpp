@@ -9,9 +9,13 @@ void EcsWorld::handle_notification(int p_notification) {
 }
 
 void EcsWorld::on_start() {
+	add_resource<DeltaTime>(DeltaTime{ 0.00001 });
+	add_resource<FixedDeltaTime>(FixedDeltaTime{ 0.00001 });
 }
 
 void EcsWorld::fixed_update(float p_time) {
+
+	get_resource<FixedDeltaTime>().delta = p_time;
 
 	// TODO run fixed update on systems
 
@@ -19,6 +23,8 @@ void EcsWorld::fixed_update(float p_time) {
 }
 
 void EcsWorld::update(float p_time) {
+
+	get_resource<DeltaTime>().delta = p_time;
 
 	for (int i = 0; i < systems.size(); i++) {
 		// TODO create entity streams that match the system
@@ -113,6 +119,21 @@ void EcsWorld::remove_component(Entity p_entity, ComponentHandle p_component) {
 	ComponentStorage &comp_storage = components[p_component];
 
 	comp_storage.component_index.remove(p_entity.id);
+}
+
+ResourceHandle EcsWorld::register_resource(const StringName &p_resource_name, size_t p_size) {
+	ResourceHandle handle = resource_data.size();
+
+	resource_size[handle] = p_size;
+	resource_names[p_resource_name] = handle;
+
+	resource_data.resize(resource_data.size() + p_size);
+
+	return handle;
+}
+
+void *EcsWorld::get_resource(ResourceHandle p_resource) {
+	return (void *)&resource_data[p_resource];
 }
 
 SystemHandle EcsWorld::register_system(const StringName &p_system_name, System *p_system) {

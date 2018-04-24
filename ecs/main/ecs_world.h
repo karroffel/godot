@@ -9,6 +9,7 @@
 
 #include "os/input_event.h"
 
+#include "ecs/resources/basic_required.h"
 #include "state_machine.h"
 
 #include <typeinfo>
@@ -17,6 +18,8 @@ typedef uint32_t EntityIndex;
 typedef uint16_t EntityGeneration;
 
 typedef uint32_t ComponentHandle;
+
+typedef uint32_t ResourceHandle;
 
 typedef uint32_t SystemHandle;
 
@@ -53,6 +56,10 @@ class EcsWorld {
 	OAHashMap<size_t, ComponentHandle> component_handles;
 
 	// resource stuff
+	Vector<uint8_t> resource_data;
+	OAHashMap<size_t, ResourceHandle> resource_handles;
+	HashMap<ResourceHandle, size_t> resource_size;
+	HashMap<StringName, ResourceHandle> resource_names;
 
 	// tag stuff
 
@@ -133,6 +140,32 @@ public:
 		component_handles.lookup(typeid(T).hash_code(), &handle);
 
 		remove_component(p_entity, handle);
+	}
+
+	// dealing with resources
+
+	ResourceHandle register_resource(const StringName &p_resource_name, size_t p_size);
+
+	void *get_resource(ResourceHandle p_resource);
+
+	template <class T>
+	_FORCE_INLINE_ T &register_resource() {
+		ResourceHandle handle = register_resource(StringName(typeid(T).name()), sizeof(T));
+		resource_handles.set(typeid(T).hash_code(), handle);
+		return *(T *)get_resource(handle);
+	}
+
+	template <class T>
+	_FORCE_INLINE_ T &get_resource() {
+		ResourceHandle handle = 0;
+		resource_handles.lookup(typeid(T).hash_code(), &handle);
+		return *(T *)get_resource(handle);
+	}
+
+	template <class T>
+	_FORCE_INLINE_ void add_resource(const T &p_resource_data) {
+		register_resource<T>();
+		get_resource<T>() = p_resource_data;
 	}
 
 	// dealing with systems

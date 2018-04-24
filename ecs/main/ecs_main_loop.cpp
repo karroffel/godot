@@ -13,7 +13,7 @@ class TestState : public State {
 public:
 	virtual void on_start(EcsWorld *p_world) {
 		a = p_world->create_entity();
-		p_world->add_component_with_data(a, Position{ 13.42, 37.42 });
+		p_world->add_component_with_data(a, Position{ 0.0, 1337.42 });
 	}
 	virtual Transition handle_notification(EcsWorld *p_world, int p_notification) {
 		switch (p_notification) {
@@ -27,7 +27,7 @@ public:
 	virtual Transition update(EcsWorld *p_world) {
 
 		Position *pos = p_world->get_component<Position>(a);
-		pos->x += 0.1;
+		pos->x += 1.0 * p_world->get_resource<DeltaTime>().delta;
 
 		print_line("position: " + String::num(pos->x) + ", " + String::num(pos->y));
 
@@ -94,5 +94,9 @@ void EcsMainLoop::input_text(const String &p_text) {
 EcsWorld *EcsMainLoop::create_world() {
 	worlds.resize(worlds.size() + 1);
 
-	return &worlds[worlds.size() - 1];
+	EcsWorld *world = &worlds[worlds.size() - 1];
+
+	world->on_start();
+
+	return world;
 }
