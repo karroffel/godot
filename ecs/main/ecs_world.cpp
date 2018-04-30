@@ -26,11 +26,7 @@ void EcsWorld::update(float p_time) {
 
 	get_resource<DeltaTime>().delta = p_time;
 
-	for (int i = 0; i < systems.size(); i++) {
-		// TODO create entity streams that match the system
-
-		systems[i]->update();
-	}
+	system_scheduler.dispatch_update(this);
 
 	state.update(this);
 }
@@ -45,6 +41,10 @@ void EcsWorld::on_stop() {
 	}
 }
 
+void EcsWorld::update_system_scheduler() {
+	system_scheduler.recalculate_components(system_data);
+}
+
 Entity EcsWorld::create_entity() {
 
 	uint32_t index = 0;
@@ -52,9 +52,15 @@ Entity EcsWorld::create_entity() {
 	if (entity_free_indices.size() > MINIMUM_FREE_ENTITIES) {
 		index = entity_free_indices[0];
 		entity_free_indices.remove(0);
+
+		entity_component_set[index] = BitSet();
+		entity_tag_set[index] = BitSet();
 	} else {
 		entity_generation.push_back(0);
 		index = entity_generation.size() - 1;
+
+		entity_component_set.push_back(BitSet());
+		entity_tag_set.push_back(BitSet());
 	}
 
 	return Entity{ index, entity_generation[index] };
@@ -64,13 +70,16 @@ void EcsWorld::destroy_entity(Entity p_entity) {
 
 	entity_generation[p_entity.id] += 1;
 	entity_free_indices.push_back(p_entity.id);
+
+	entity_component_set[p_entity.id] = BitSet();
+	entity_tag_set[p_entity.id] = BitSet();
 }
 
 bool EcsWorld::is_entity_alive(Entity p_entity) {
 	return entity_generation[p_entity.id] == p_entity.generation;
 }
 
-ComponentHandle EcsWorld::register_component_type(const StringName &p_name, size_t p_size) {
+ComponentHandle EcsWorld::register_component(const StringName &p_name, size_t p_size) {
 
 	ComponentHandle handle = component_last_handle;
 	component_names[p_name] = handle;
@@ -88,7 +97,7 @@ void *EcsWorld::add_component(Entity p_entity, ComponentHandle p_component) {
 	ComponentStorage &comp_storage = components[p_component];
 
 	uint32_t idx = 0;
-	bool entity_has_component = comp_storage.component_index.lookup(p_entity.id, &idx);
+	bool entity_has_component = entity_component_set[p_entity.id].get(p_component);
 	if (!entity_has_component) {
 		uint32_t number_components = comp_storage.component_data.size() / comp_storage.size_of_individual_component;
 
@@ -96,6 +105,7 @@ void *EcsWorld::add_component(Entity p_entity, ComponentHandle p_component) {
 
 		idx = number_components;
 		comp_storage.component_index.set(p_entity.id, idx);
+		entity_component_set[p_entity.id].set(p_component, true);
 	}
 
 	return (void *)&comp_storage.component_data[idx * comp_storage.size_of_individual_component];
@@ -103,22 +113,20 @@ void *EcsWorld::add_component(Entity p_entity, ComponentHandle p_component) {
 
 void *EcsWorld::get_component(Entity p_entity, ComponentHandle p_component) {
 
-	ComponentStorage &comp_storage = components[p_component];
-
 	uint32_t idx = 0;
-	bool entity_has_component = comp_storage.component_index.lookup(p_entity.id, &idx);
+	bool entity_has_component = entity_component_set[p_entity.id].get(p_component);
 	if (!entity_has_component) {
 		return nullptr;
 	}
+
+	ComponentStorage &comp_storage = components[p_component];
 
 	return (void *)&comp_storage.component_data[idx * comp_storage.size_of_individual_component];
 }
 
 void EcsWorld::remove_component(Entity p_entity, ComponentHandle p_component) {
 
-	ComponentStorage &comp_storage = components[p_component];
-
-	comp_storage.component_index.remove(p_entity.id);
+	entity_component_set[p_entity.id].set(p_component, false);
 }
 
 ResourceHandle EcsWorld::register_resource(const StringName &p_resource_name, size_t p_size) {
@@ -147,14 +155,16 @@ TagHandle EcsWorld::register_tag(const StringName &p_tag_name) {
 
 void EcsWorld::add_tag(Entity p_entity, TagHandle p_tag) {
 	tags[p_tag].insert(p_entity.id);
+	entity_tag_set[p_entity.id].set(p_tag, true);
 }
 
 void EcsWorld::remove_tag(Entity p_entity, TagHandle p_tag) {
 	tags[p_tag].erase(p_entity.id);
+	entity_tag_set[p_entity.id].set(p_tag, false);
 }
 
 bool EcsWorld::has_tag(Entity p_entity, TagHandle p_tag) {
-	return tags[p_tag].has(p_entity.id);
+	return entity_tag_set[p_entity.id].get(p_tag);
 }
 
 SystemHandle EcsWorld::register_system(const StringName &p_system_name, System *p_system) {
@@ -163,10 +173,43 @@ SystemHandle EcsWorld::register_system(const StringName &p_system_name, System *
 
 	system_names.push_back(p_system_name);
 	systems.push_back(p_system);
+	system_data.push_back(SystemData());
 
 	p_system->init();
 
 	return handle;
+}
+
+void EcsWorld::system_run_after(SystemHandle p_system, SystemHandle p_before) {
+	system_data[p_system].depending_on_systems.set(p_before, true);
+}
+
+void EcsWorld::system_add_reading_component(SystemHandle p_system, ComponentHandle p_comp) {
+	system_data[p_system].reading_components.set(p_comp, true);
+}
+
+void EcsWorld::system_add_writing_component(SystemHandle p_system, ComponentHandle p_comp) {
+	system_data[p_system].writing_components.set(p_comp, true);
+}
+
+void EcsWorld::system_add_required_tag(SystemHandle p_system, TagHandle p_tag) {
+	system_data[p_system].required_tags.set(p_tag, true);
+}
+
+void EcsWorld::system_add_disallowed_component(SystemHandle p_system, ComponentHandle p_comp) {
+	system_data[p_system].disallowed_components.set(p_comp, true);
+}
+
+void EcsWorld::system_add_disallowed_tag(SystemHandle p_system, TagHandle p_tag) {
+	system_data[p_system].disallowed_tags.set(p_tag, true);
+}
+
+void EcsWorld::system_add_reading_resource(SystemHandle p_system, ResourceHandle p_res) {
+	system_data[p_system].reading_resources.set(p_res, true);
+}
+
+void EcsWorld::system_add_writing_resource(SystemHandle p_system, ResourceHandle p_res) {
+	system_data[p_system].writing_resources.set(p_res, true);
 }
 
 void EcsWorld::set_initial_state(State *p_state) {

@@ -20,6 +20,8 @@ public:
 	virtual void input_event(const Ref<InputEvent> &p_event);
 	virtual void input_text(const String &p_text);
 
+	void _notification(int p_notification);
+
 	EcsWorld *create_world();
 };
 

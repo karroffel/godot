@@ -7,6 +7,21 @@ struct Position {
 
 struct TestTag {};
 
+class MoveSystem : public System {
+public:
+	void update(EcsWorld *p_world, EntityStream &r_entity_stream) {
+
+		Entity e;
+
+		float delta = p_world->get_resource<DeltaTime>().delta;
+		while (r_entity_stream.next(e)) {
+			Position *pos = p_world->get_component<Position>(e);
+
+			pos->x += delta;
+		}
+	}
+};
+
 class TestState : public State {
 
 	Entity a;
@@ -14,7 +29,15 @@ class TestState : public State {
 	// State interface
 public:
 	virtual void on_start(EcsWorld *p_world) {
+
 		p_world->register_tag<TestTag>();
+		p_world->register_component<Position>();
+
+		p_world->register_system<MoveSystem>("Move");
+		p_world->system_add_reading_component<MoveSystem, Position>();
+		p_world->system_add_reading_resource<MoveSystem, DeltaTime>();
+
+		p_world->update_system_scheduler();
 
 		a = p_world->create_entity();
 		p_world->add_component_with_data(a, Position{ 0.0, 1337.42 });
@@ -32,7 +55,6 @@ public:
 	virtual Transition update(EcsWorld *p_world) {
 
 		Position *pos = p_world->get_component<Position>(a);
-		pos->x += 1.0 * p_world->get_resource<DeltaTime>().delta;
 
 		print_line("position: " + String::num(pos->x) + ", " + String::num(pos->y));
 
@@ -46,7 +68,6 @@ void EcsMainLoop::init() {
 
 	// create worlds
 	EcsWorld *world = create_world();
-	world->register_component_type<Position>();
 
 	// register components
 
@@ -94,6 +115,14 @@ void EcsMainLoop::input_event(const Ref<InputEvent> &p_event) {
 }
 
 void EcsMainLoop::input_text(const String &p_text) {
+}
+
+void EcsMainLoop::_notification(int p_notification) {
+	for (int i = 0; i < worlds.size() && !requested_quit; i++) {
+		worlds[i].handle_notification(p_notification);
+
+		requested_quit = requested_quit || worlds[i].requested_quit();
+	}
 }
 
 EcsWorld *EcsMainLoop::create_world() {
