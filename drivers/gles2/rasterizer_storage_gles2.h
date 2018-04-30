@@ -38,11 +38,11 @@
 #include "shader_gles2.h"
 
 #include "shaders/copy.glsl.gen.h"
+#include "shaders/cubemap_filter.glsl.gen.h"
 /*
 #include "shaders/blend_shape.glsl.gen.h"
 #include "shaders/canvas.glsl.gen.h"
 #include "shaders/copy.glsl.gen.h"
-#include "shaders/cubemap_filter.glsl.gen.h"
 #include "shaders/particles.glsl.gen.h"
 */
 
@@ -95,7 +95,6 @@ public:
 		GLuint aniso_tex;
 
 		GLuint quadie;
-		GLuint quadie_array;
 
 		size_t skeleton_transform_buffer_size;
 		GLuint skeleton_transform_buffer;
@@ -108,6 +107,7 @@ public:
 		ShaderCompilerGLES2 compiler;
 
 		CopyShaderGLES2 copy;
+		CubemapFilterShaderGLES2 cubemap_filter;
 
 		ShaderCompilerGLES2::IdentifierActions actions_canvas;
 		ShaderCompilerGLES2::IdentifierActions actions_scene;
@@ -147,6 +147,8 @@ public:
 		}
 
 	} info;
+
+	void bind_quad_array() const;
 
 	/////////////////////////////////////////////////////////////////////////////////////////
 	//////////////////////////////////DATA///////////////////////////////////////////////////
@@ -255,6 +257,15 @@ public:
 
 		bool redraw_if_visible;
 
+		VisualServer::TextureDetectCallback detect_3d;
+		void *detect_3d_ud;
+
+		VisualServer::TextureDetectCallback detect_srgb;
+		void *detect_srgb_ud;
+
+		VisualServer::TextureDetectCallback detect_normal;
+		void *detect_normal_ud;
+
 		Texture() {
 			flags = 0;
 			width = 0;
@@ -344,6 +355,15 @@ public:
 	virtual void texture_set_force_redraw_if_visible(RID p_texture, bool p_enable);
 
 	/* SKY API */
+
+	struct Sky : public RID_Data {
+
+		RID panorama;
+		GLuint radiance;
+		int radiance_size;
+	};
+
+	mutable RID_Owner<Sky> sky_owner;
 
 	virtual RID sky_create();
 	virtual void sky_set_texture(RID p_sky, RID p_panorama, int p_radiance_size);

@@ -106,73 +106,133 @@ bool RasterizerSceneGLES2::reflection_probe_instance_postprocess_step(RID p_inst
 
 RID RasterizerSceneGLES2::environment_create() {
 
-	return RID();
+	Environment *env = memnew(Environment);
+
+	return environment_owner.make_rid(env);
 }
 
 void RasterizerSceneGLES2::environment_set_background(RID p_env, VS::EnvironmentBG p_bg) {
+
+	Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND(!env);
+	env->bg_mode = p_bg;
 }
 
 void RasterizerSceneGLES2::environment_set_sky(RID p_env, RID p_sky) {
+	Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND(!env);
+
+	env->sky = p_sky;
 }
 
 void RasterizerSceneGLES2::environment_set_sky_custom_fov(RID p_env, float p_scale) {
+	Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND(!env);
+
+	env->sky_custom_fov = p_scale;
 }
 
 void RasterizerSceneGLES2::environment_set_bg_color(RID p_env, const Color &p_color) {
+	Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND(!env);
+
+	env->bg_color = p_color;
 }
 
 void RasterizerSceneGLES2::environment_set_bg_energy(RID p_env, float p_energy) {
+	Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND(!env);
+
+	env->bg_energy = p_energy;
 }
 
 void RasterizerSceneGLES2::environment_set_canvas_max_layer(RID p_env, int p_max_layer) {
+	Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND(!env);
+
+	env->canvas_max_layer = p_max_layer;
 }
 
 void RasterizerSceneGLES2::environment_set_ambient_light(RID p_env, const Color &p_color, float p_energy, float p_sky_contribution) {
+	Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND(!env);
+
+	env->ambient_color = p_color;
+	env->ambient_energy = p_energy;
+	env->ambient_sky_contribution = p_sky_contribution;
 }
 
 void RasterizerSceneGLES2::environment_set_dof_blur_far(RID p_env, bool p_enable, float p_distance, float p_transition, float p_amount, VS::EnvironmentDOFBlurQuality p_quality) {
+	Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND(!env);
 }
 
 void RasterizerSceneGLES2::environment_set_dof_blur_near(RID p_env, bool p_enable, float p_distance, float p_transition, float p_amount, VS::EnvironmentDOFBlurQuality p_quality) {
+	Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND(!env);
 }
 
 void RasterizerSceneGLES2::environment_set_glow(RID p_env, bool p_enable, int p_level_flags, float p_intensity, float p_strength, float p_bloom_threshold, VS::EnvironmentGlowBlendMode p_blend_mode, float p_hdr_bleed_threshold, float p_hdr_bleed_scale, bool p_bicubic_upscale) {
+	Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND(!env);
 }
 
 void RasterizerSceneGLES2::environment_set_fog(RID p_env, bool p_enable, float p_begin, float p_end, RID p_gradient_texture) {
+	Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND(!env);
 }
 
 void RasterizerSceneGLES2::environment_set_ssr(RID p_env, bool p_enable, int p_max_steps, float p_fade_in, float p_fade_out, float p_depth_tolerance, bool p_roughness) {
+	Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND(!env);
 }
 
 void RasterizerSceneGLES2::environment_set_ssao(RID p_env, bool p_enable, float p_radius, float p_intensity, float p_radius2, float p_intensity2, float p_bias, float p_light_affect, float p_ao_channel_affect, const Color &p_color, VS::EnvironmentSSAOQuality p_quality, VisualServer::EnvironmentSSAOBlur p_blur, float p_bilateral_sharpness) {
+	Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND(!env);
 }
 
 void RasterizerSceneGLES2::environment_set_tonemap(RID p_env, VS::EnvironmentToneMapper p_tone_mapper, float p_exposure, float p_white, bool p_auto_exposure, float p_min_luminance, float p_max_luminance, float p_auto_exp_speed, float p_auto_exp_scale) {
+	Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND(!env);
 }
 
 void RasterizerSceneGLES2::environment_set_adjustment(RID p_env, bool p_enable, float p_brightness, float p_contrast, float p_saturation, RID p_ramp) {
+	Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND(!env);
 }
 
 void RasterizerSceneGLES2::environment_set_fog(RID p_env, bool p_enable, const Color &p_color, const Color &p_sun_color, float p_sun_amount) {
+	Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND(!env);
 }
 
 void RasterizerSceneGLES2::environment_set_fog_depth(RID p_env, bool p_enable, float p_depth_begin, float p_depth_curve, bool p_transmit, float p_transmit_curve) {
+	Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND(!env);
 }
 
 void RasterizerSceneGLES2::environment_set_fog_height(RID p_env, bool p_enable, float p_min_height, float p_max_height, float p_height_curve) {
+	Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND(!env);
 }
 
 bool RasterizerSceneGLES2::is_environment(RID p_env) {
-	return false;
+	return environment_owner.owns(p_env);
 }
 
 VS::EnvironmentBG RasterizerSceneGLES2::environment_get_background(RID p_env) {
-	return VS::ENV_BG_CLEAR_COLOR;
+	const Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND_V(!env, VS::ENV_BG_MAX);
+
+	return env->bg_mode;
 }
 
 int RasterizerSceneGLES2::environment_get_canvas_max_layer(RID p_env) {
-	return 0;
+	const Environment *env = environment_owner.getornull(p_env);
+	ERR_FAIL_COND_V(!env, -1);
+
+	return env->canvas_max_layer;
 }
 
 RID RasterizerSceneGLES2::light_instance_create(RID p_light) {
@@ -663,11 +723,102 @@ void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList:
 	}
 }
 
+void RasterizerSceneGLES2::_draw_sky(RasterizerStorageGLES2::Sky *p_sky, const CameraMatrix &p_projection, const Transform &p_transform, bool p_vflip, float p_custom_fov, float p_energy) {
+	ERR_FAIL_COND(!p_sky);
+
+	RasterizerStorageGLES2::Texture *tex = storage->texture_owner.getornull(p_sky->panorama);
+	ERR_FAIL_COND(!tex);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(tex->target, tex->tex_id);
+
+	glDepthMask(GL_TRUE);
+	glEnable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_BLEND);
+	glDepthFunc(GL_LEQUAL);
+	glColorMask(1, 1, 1, 1);
+
+	// Camera
+	CameraMatrix camera;
+
+	if (p_custom_fov) {
+
+		float near_plane = p_projection.get_z_near();
+		float far_plane = p_projection.get_z_far();
+		float aspect = p_projection.get_aspect();
+
+		camera.set_perspective(p_custom_fov, aspect, near_plane, far_plane);
+	} else {
+		camera = p_projection;
+	}
+
+	float flip_sign = p_vflip ? -1 : 1;
+
+	// If matrix[2][0] or matrix[2][1] we're dealing with an asymmetrical projection matrix. This is the case for stereoscopic rendering (i.e. VR).
+	// To ensure the image rendered is perspective correct we need to move some logic into the shader. For this the USE_ASYM_PANO option is introduced.
+	// It also means the uv coordinates are ignored in this mode and we don't need our loop.
+	bool asymmetrical = ((camera.matrix[2][0] != 0.0) || (camera.matrix[2][1] != 0.0));
+
+	Vector3 vertices[8] = {
+		Vector3(-1, -1 * flip_sign, 1),
+		Vector3(0, 1, 0),
+		Vector3(1, -1 * flip_sign, 1),
+		Vector3(1, 1, 0),
+		Vector3(1, 1 * flip_sign, 1),
+		Vector3(1, 0, 0),
+		Vector3(-1, 1 * flip_sign, 1),
+		Vector3(0, 0, 0),
+	};
+
+	if (!asymmetrical) {
+		float vw, vh, zn;
+		camera.get_viewport_size(vw, vh);
+		zn = p_projection.get_z_near();
+
+		for (int i = 0; i < 4; i++) {
+			Vector3 uv = vertices[i * 2 + 1];
+			uv.x = (uv.x * 2.0 - 1.0) * vw;
+			uv.y = -(uv.y * 2.0 - 1.0) * vh;
+			uv.z = -zn;
+			vertices[i * 2 + 1] = p_transform.basis.xform(uv).normalized();
+			vertices[i * 2 + 1].z = -vertices[i * 2 + 1].z;
+		}
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, state.sky_verts);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(Vector3) * 8, vertices);
+
+	// bind sky vertex array....
+	glVertexAttribPointer(VS::ARRAY_VERTEX, 3, GL_FLOAT, GL_FALSE, sizeof(Vector3) * 2, 0);
+	glVertexAttribPointer(VS::ARRAY_TEX_UV, 3, GL_FLOAT, GL_FALSE, sizeof(Vector3) * 2, ((uint8_t *)NULL) + sizeof(Vector3));
+	glEnableVertexAttribArray(VS::ARRAY_VERTEX);
+	glEnableVertexAttribArray(VS::ARRAY_TEX_UV);
+
+	storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_MULTIPLIER, true);
+	storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUBEMAP, false);
+	storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_PANORAMA, true);
+	storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_COPY_SECTION, false);
+	storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUSTOM_ALPHA, false);
+	storage->shaders.copy.bind();
+	storage->shaders.copy.set_uniform(CopyShaderGLES2::MULTIPLIER, p_energy);
+
+	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+
+	glDisableVertexAttribArray(VS::ARRAY_VERTEX);
+	glDisableVertexAttribArray(VS::ARRAY_TEX_UV);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_MULTIPLIER, false);
+	storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUBEMAP, false);
+}
+
 void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const CameraMatrix &p_cam_projection, bool p_cam_ortogonal, InstanceBase **p_cull_result, int p_cull_count, RID *p_light_cull_result, int p_light_cull_count, RID *p_reflection_probe_cull_result, int p_reflection_probe_cull_count, RID p_environment, RID p_shadow_atlas, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass) {
 
 	glEnable(GL_BLEND);
 
 	GLuint current_fb = storage->frame.current_rt->fbo;
+	Environment *env = environment_owner.getornull(p_environment);
 
 	// render list stuff
 
@@ -689,11 +840,38 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 
 	glVertexAttrib4f(VS::ARRAY_COLOR, 1, 1, 1, 1);
 
-	// render opaque things first
-
 	glBlendEquation(GL_FUNC_ADD);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+	// render sky
+	RasterizerStorageGLES2::Sky *sky = NULL;
+	GLuint env_radiance_tex = 0;
+	if (env) {
+		switch (env->bg_mode) {
+
+			case VS::ENV_BG_COLOR_SKY:
+			case VS::ENV_BG_SKY: {
+				sky = storage->sky_owner.getornull(env->sky);
+
+				if (sky) {
+					env_radiance_tex = sky->radiance;
+				}
+			} break;
+
+			default: {
+				print_line("uhm");
+			} break;
+		}
+	}
+
+	if (env && env->bg_mode == VS::ENV_BG_SKY && (!storage->frame.current_rt || !storage->frame.current_rt->flags[RasterizerStorage::RENDER_TARGET_TRANSPARENT])) {
+
+		if (sky && sky->panorama.is_valid()) {
+			_draw_sky(sky, p_cam_projection, p_cam_transform, false, env->sky_custom_fov, env->bg_energy);
+		}
+	}
+
+	// render opaque things first
 	render_list.sort_by_key(false);
 	_render_render_list(render_list.elements, render_list.element_count, p_cam_transform, p_cam_projection, 0, false, false, false, false, false);
 
@@ -739,6 +917,13 @@ void RasterizerSceneGLES2::initialize() {
 		default_material_twosided = storage->material_create();
 		storage->shader_set_code(default_shader_twosided, "shader_type spatial; render_mode cull_disabled;\n");
 		storage->material_set_shader(default_material_twosided, default_shader_twosided);
+	}
+
+	{
+		glGenBuffers(1, &state.sky_verts);
+		glBindBuffer(GL_ARRAY_BUFFER, state.sky_verts);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(Vector3) * 8, NULL, GL_DYNAMIC_DRAW);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
 }
 

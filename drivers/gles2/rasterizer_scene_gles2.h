@@ -68,6 +68,9 @@ public:
 		GLuint current_main_tex;
 
 		SceneShaderGLES2 scene_shader;
+
+		GLuint sky_verts;
+
 		// CubeToDpShaderGLES3 cube_to_dp_shader;
 		// ResolveShaderGLES3 resolve_shader;
 		// ScreenSpaceReflectionShaderGLES3 ssr_shader;
@@ -133,7 +136,6 @@ public:
 
 		GLuint env_radiance_ubo;
 
-		GLuint sky_verts;
 		GLuint sky_array;
 
 		GLuint directional_ubo;
@@ -201,6 +203,36 @@ public:
 	virtual bool reflection_probe_instance_postprocess_step(RID p_instance);
 
 	/* ENVIRONMENT API */
+
+	struct Environment : public RID_Data {
+		VS::EnvironmentBG bg_mode;
+
+		RID sky;
+		float sky_custom_fov;
+
+		Color bg_color;
+		float bg_energy;
+		float sky_ambient;
+
+		Color ambient_color;
+		float ambient_energy;
+		float ambient_sky_contribution;
+
+		int canvas_max_layer;
+
+		Environment() {
+			bg_mode = VS::ENV_BG_CLEAR_COLOR;
+			sky_custom_fov = 0.0;
+			bg_energy = 1.0;
+			sky_ambient = 0;
+			ambient_energy = 1.0;
+			ambient_sky_contribution = 0.0;
+			canvas_max_layer = 0;
+		}
+	};
+
+	mutable RID_Owner<Environment> environment_owner;
+
 	virtual RID environment_create();
 
 	virtual void environment_set_background(RID p_env, VS::EnvironmentBG p_bg);
@@ -414,6 +446,8 @@ public:
 
 	void _fill_render_list(InstanceBase **p_cull_result, int p_cull_count, bool p_depth_pass, bool p_shadow_pass);
 	void _render_render_list(RenderList::Element **p_elements, int p_element_count, const Transform &p_view_transform, const CameraMatrix &p_projection, GLuint p_base_env, bool p_reverse_cull, bool p_alpha_pass, bool p_shadow, bool p_directional_add, bool p_directional_shadows);
+
+	void _draw_sky(RasterizerStorageGLES2::Sky *p_sky, const CameraMatrix &p_projection, const Transform &p_transform, bool p_vflip, float p_custom_fov, float p_energy);
 
 	void _setup_material(RasterizerStorageGLES2::Material *p_material);
 	void _setup_geometry(RenderList::Element *p_element, RasterizerStorageGLES2::Skeleton *p_skeleton);
