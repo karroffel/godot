@@ -7,7 +7,7 @@ struct BitSet {
 
 	uint64_t fast_bits = 0;
 
-	Vector<uint64_t> bits;
+	Vector<uint64_t> bits = Vector<uint64_t>();
 
 	_FORCE_INLINE_ void set(uint32_t p_index, bool p_value) {
 		uint32_t element_index = p_index / 64;

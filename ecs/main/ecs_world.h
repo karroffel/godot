@@ -24,7 +24,7 @@
 
 struct ComponentStorage {
 	size_t size_of_individual_component;
-	OAHashMap<EntityIndex, uint32_t> component_index;
+	HashMap<EntityIndex, uint32_t> component_index;
 	Vector<uint8_t> component_data;
 };
 
@@ -45,24 +45,24 @@ public:
 	ComponentHandle component_last_handle = 0;
 	HashMap<StringName, ComponentHandle> component_names;
 	Vector<ComponentStorage> components;
-	OAHashMap<size_t, ComponentHandle> component_handles;
+	HashMap<size_t, ComponentHandle> component_handles;
 
 	// resource stuff
 	Vector<uint8_t> resource_data;
-	OAHashMap<size_t, ResourceHandle> resource_handles;
+	HashMap<size_t, ResourceHandle> resource_handles;
 	HashMap<ResourceHandle, size_t> resource_size;
 	HashMap<StringName, ResourceHandle> resource_names;
 
 	// tag stuff
 	HashMap<StringName, TagHandle> tag_names;
-	OAHashMap<size_t, TagHandle> tag_handles;
+	HashMap<size_t, TagHandle> tag_handles;
 	Vector<Set<EntityIndex> > tags;
 
 	// system stuff
 
 	Vector<StringName> system_names;
 	Vector<System *> systems;
-	OAHashMap<size_t, SystemHandle> system_handles;
+	HashMap<size_t, SystemHandle> system_handles;
 	Vector<SystemData> system_data;
 
 	// system scheduler
@@ -112,16 +112,14 @@ public:
 
 	template <class T>
 	_FORCE_INLINE_ T *add_component(Entity p_entity) {
-		ComponentHandle handle = 0;
-		component_handles.lookup(typeid(T).hash_code(), &handle);
+		ComponentHandle handle = component_handles[typeid(T).hash_code()];
 
 		return (T *)add_component(p_entity, handle);
 	}
 
 	template <class T>
 	_FORCE_INLINE_ T *add_component_with_data(Entity p_entity, const T &p_data) {
-		ComponentHandle handle = 0;
-		component_handles.lookup(typeid(T).hash_code(), &handle);
+		ComponentHandle handle = component_handles[typeid(T).hash_code()];
 
 		T *data_ptr = (T *)add_component(p_entity, handle);
 		*data_ptr = p_data;
@@ -130,16 +128,14 @@ public:
 
 	template <class T>
 	_FORCE_INLINE_ T *get_component(Entity p_entity) {
-		ComponentHandle handle = 0;
-		component_handles.lookup(typeid(T).hash_code(), &handle);
+		ComponentHandle handle = component_handles[typeid(T).hash_code()];
 
 		return (T *)get_component(p_entity, handle);
 	}
 
 	template <class T>
 	_FORCE_INLINE_ void remove_component(Entity p_entity) {
-		ComponentHandle handle = 0;
-		component_handles.lookup(typeid(T).hash_code(), &handle);
+		ComponentHandle handle = component_handles[typeid(T).hash_code()];
 
 		remove_component(p_entity, handle);
 	}
@@ -159,8 +155,7 @@ public:
 
 	template <class T>
 	_FORCE_INLINE_ T &get_resource() {
-		ResourceHandle handle = 0;
-		resource_handles.lookup(typeid(T).hash_code(), &handle);
+		ResourceHandle handle = resource_handles[typeid(T).hash_code()];
 		return *(T *)get_resource(handle);
 	}
 
@@ -184,24 +179,21 @@ public:
 
 	template <class T>
 	_FORCE_INLINE_ void add_tag(Entity p_entity) {
-		TagHandle handle = 0;
-		tag_handles.lookup(typeid(T).hash_code(), &handle);
+		TagHandle handle = tag_handles[typeid(T).hash_code()];
 
 		add_tag(p_entity, handle);
 	}
 
 	template <class T>
 	_FORCE_INLINE_ void remove_tag(Entity p_entity) {
-		TagHandle handle = 0;
-		tag_handles.lookup(typeid(T).hash_code(), &handle);
+		TagHandle handle = tag_handles[typeid(T).hash_code()];
 
 		remove_tag(p_entity, handle);
 	}
 
 	template <class T>
 	_FORCE_INLINE_ bool has_tag(Entity p_entity) {
-		TagHandle handle = 0;
-		tag_handles.lookup(typeid(T).hash_code(), &handle);
+		TagHandle handle = tag_handles[typeid(T).hash_code()];
 
 		return has_tag(p_entity, handle);
 	}
@@ -227,87 +219,77 @@ public:
 		system_handles.set(typeid(S).hash_code(), handle);
 	}
 
+	template <class S>
+	_FORCE_INLINE_ void register_system_custom(const StringName &p_system_name, S *p_system) {
+		SystemHandle handle = register_system(p_system_name, p_system);
+		system_handles.set(typeid(S).hash_code(), handle);
+	}
+
 	template <class S, class B>
 	_FORCE_INLINE_ void system_run_after() {
-		SystemHandle handle = 0;
-		system_handles.lookup(typeid(S).hash_code(), &handle);
+		SystemHandle handle = system_handles[typeid(S).hash_code()];
 
-		SystemHandle before_handle = 0;
-		system_handles.lookup(typeid(B).hash_code(), &before_handle);
+		SystemHandle before_handle = system_handles[typeid(B).hash_code()];
 
 		system_run_after(handle, before_handle);
 	}
 
 	template <class S, class C>
 	_FORCE_INLINE_ void system_add_reading_component() {
-		SystemHandle handle = 0;
-		system_handles.lookup(typeid(S).hash_code(), &handle);
+		SystemHandle handle = system_handles[typeid(S).hash_code()];
 
-		ComponentHandle comp_handle = 0;
-		component_handles.lookup(typeid(C).hash_code(), &comp_handle);
+		ComponentHandle comp_handle = component_handles[typeid(C).hash_code()];
 
 		system_add_reading_component(handle, comp_handle);
 	}
 
 	template <class S, class C>
 	_FORCE_INLINE_ void system_add_writing_component() {
-		SystemHandle handle = 0;
-		system_handles.lookup(typeid(S).hash_code(), &handle);
+		SystemHandle handle = system_handles[typeid(S).hash_code()];
 
-		ComponentHandle comp_handle = 0;
-		component_handles.lookup(typeid(C).hash_code(), &comp_handle);
+		ComponentHandle comp_handle = component_handles[typeid(C).hash_code()];
 
 		system_add_writing_component(handle, comp_handle);
 	}
 	template <class S, class T>
 	_FORCE_INLINE_ void system_add_required_tag() {
-		SystemHandle handle = 0;
-		system_handles.lookup(typeid(S).hash_code(), &handle);
+		SystemHandle handle = system_handles[typeid(S).hash_code()];
 
-		TagHandle tag_handle = 0;
-		tag_handles.lookup(typeid(T).hash_code(), &tag_handle);
+		TagHandle tag_handle = tag_handles[typeid(T).hash_code()];
 
 		system_add_required_tag(handle, tag_handle);
 	}
 	template <class S, class C>
 	_FORCE_INLINE_ void system_add_disallowed_component() {
-		SystemHandle handle = 0;
-		system_handles.lookup(typeid(S).hash_code(), &handle);
+		SystemHandle handle = system_handles[typeid(S).hash_code()];
 
-		ComponentHandle comp_handle = 0;
-		component_handles.lookup(typeid(C).hash_code(), &comp_handle);
+		ComponentHandle comp_handle = component_handles[typeid(C).hash_code()];
 
 		system_add_disallowed_component(handle, comp_handle);
 	}
 	template <class S, class T>
 	_FORCE_INLINE_ void system_add_disallowed_tag() {
-		SystemHandle handle = 0;
-		system_handles.lookup(typeid(S).hash_code(), &handle);
+		SystemHandle handle = system_handles[typeid(S).hash_code()];
 
-		TagHandle tag_handle = 0;
-		tag_handles.lookup(typeid(T).hash_code(), &tag_handle);
+		TagHandle tag_handle = tag_handles[typeid(T).hash_code()];
 
 		system_add_disallowed_tag(handle, tag_handle);
 	}
 
 	template <class S, class R>
 	_FORCE_INLINE_ void system_add_reading_resource() {
-		SystemHandle handle = 0;
-		system_handles.lookup(typeid(S).hash_code(), &handle);
+		SystemHandle handle = system_handles[typeid(S).hash_code()];
 
-		ResourceHandle resource_handle = 0;
-		resource_handles.lookup(typeid(R).hash_code(), &resource_handle);
+		ResourceHandle resource_handle = resource_handles[typeid(R).hash_code()];
 
 		system_add_reading_resource(handle, resource_handle);
 	}
 
 	template <class S, class R>
 	_FORCE_INLINE_ void system_add_writing_resource() {
-		SystemHandle handle = 0;
-		system_handles.lookup(typeid(S).hash_code(), &handle);
+		SystemHandle handle = system_handles[typeid(S).hash_code()];
 
-		ResourceHandle resource_handle = 0;
-		resource_handles.lookup(typeid(R).hash_code(), &resource_handle);
+		ResourceHandle resource_handle = resource_handles[typeid(R).hash_code()];
 
 		system_add_writing_resource(handle, resource_handle);
 	}

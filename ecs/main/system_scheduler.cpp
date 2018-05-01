@@ -23,7 +23,7 @@ void SystemScheduler::dispatch_update(EcsWorld *p_world) {
 
 		SystemData &data = p_world->system_data[i];
 
-		entity_stream.used_components = data.reading_components & data.writing_components;
+		entity_stream.used_components = data.reading_components | data.writing_components;
 		entity_stream.disallowed_components = data.disallowed_components;
 
 		entity_stream.used_tags = data.required_tags;
