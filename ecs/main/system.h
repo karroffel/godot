@@ -28,8 +28,8 @@ struct SystemData {
 
 class System {
 public:
-	virtual void init() {}
-	virtual void update(EcsWorld *p_world, EntityStream &r_entity_stream) = 0;
+	virtual void init(EcsWorld *world) {}
+	virtual void update(EcsWorld *world, EntityStream &entities) = 0;
 	virtual void fixed_update() {}
 	virtual void finish() {}
 };

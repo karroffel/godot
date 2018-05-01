@@ -169,15 +169,18 @@ bool EcsWorld::has_tag(Entity p_entity, TagHandle p_tag) {
 	return entity_tag_set[p_entity.id].get(p_tag);
 }
 
-SystemHandle EcsWorld::register_system(const StringName &p_system_name, System *p_system) {
+SystemHandle EcsWorld::register_system(const StringName &p_system_name, size_t p_system_hash, System *p_system) {
 
 	SystemHandle handle = systems.size();
 
 	system_names.push_back(p_system_name);
 	systems.push_back(p_system);
 	system_data.push_back(SystemData());
+	system_handles.set(p_system_hash, handle);
 
-	p_system->init();
+	p_system->init(this);
+
+	update_system_scheduler();
 
 	return handle;
 }

@@ -36,22 +36,22 @@ class EcsWorld;
 
 class State {
 public:
-	virtual void on_start(EcsWorld *p_world) {}
-	virtual void on_stop(EcsWorld *p_world) {}
-	virtual void on_pause(EcsWorld *p_world) {}
-	virtual void on_resume(EcsWorld *p_world) {}
+	virtual void on_start(EcsWorld *world) {}
+	virtual void on_stop(EcsWorld *world) {}
+	virtual void on_pause(EcsWorld *world) {}
+	virtual void on_resume(EcsWorld *world) {}
 
-	virtual Transition handle_event(EcsWorld *p_world, const Ref<InputEvent> &p_event) {
+	virtual Transition handle_event(EcsWorld *world, const Ref<InputEvent> &p_event) {
 		return Transition(Transition::Type::NONE);
 	}
 
-	virtual Transition handle_notification(EcsWorld *p_world, int p_notification) {
+	virtual Transition handle_notification(EcsWorld *world, int p_notification) {
 		return Transition(Transition::Type::NONE);
 	}
-	virtual Transition update(EcsWorld *p_world) {
+	virtual Transition update(EcsWorld *world) {
 		return Transition(Transition::Type::NONE);
 	}
-	virtual Transition fixed_update(EcsWorld *p_world) {
+	virtual Transition fixed_update(EcsWorld *world) {
 		return Transition(Transition::Type::NONE);
 	}
 };

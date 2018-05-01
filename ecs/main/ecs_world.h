@@ -199,7 +199,7 @@ public:
 	}
 	// dealing with systems
 
-	SystemHandle register_system(const StringName &p_system_name, System *p_system);
+	SystemHandle register_system(const StringName &p_system_name, size_t p_system_hash, System *p_system);
 	void system_run_after(SystemHandle p_system, SystemHandle p_before);
 
 	void system_add_disallowed_component(SystemHandle p_system, ComponentHandle p_comp);
@@ -215,14 +215,12 @@ public:
 
 	template <class S>
 	_FORCE_INLINE_ void register_system(const StringName &p_system_name) {
-		SystemHandle handle = register_system(p_system_name, new S());
-		system_handles.set(typeid(S).hash_code(), handle);
+		SystemHandle handle = register_system(p_system_name, typeid(S).hash_code(), new S());
 	}
 
 	template <class S>
 	_FORCE_INLINE_ void register_system_custom(const StringName &p_system_name, S *p_system) {
-		SystemHandle handle = register_system(p_system_name, p_system);
-		system_handles.set(typeid(S).hash_code(), handle);
+		SystemHandle handle = register_system(p_system_name, typeid(S).hash_code(), p_system);
 	}
 
 	template <class S, class B>

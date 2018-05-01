@@ -1,27 +1,39 @@
 #include "ecs_main_loop.h"
 
-#include "ecs/components/viewport_comp.h"
-
-#include "ecs/systems/viewport_sys.h"
-
 #include "core/os/input.h"
 #include "core/os/os.h"
 #include "servers/visual_server.h"
 
-struct MoveTag {};
+#include "ecs/systems/canvas_sys.h"
+
+#include "ecs/components/canvas_comps.h"
+#include "ecs/components/transform_comps.h"
+
+struct VelocityComp {
+	Vector2 velocity;
+};
 
 class MoveSystem : public System {
 public:
-	void update(EcsWorld *p_world, EntityStream &r_entity_stream) {
+	void update(EcsWorld *world, EntityStream &entities) {
 
 		Entity e;
 
-		float delta = p_world->get_resource<DeltaTime>().delta;
-		while (r_entity_stream.next(e)) {
-			Position2dComponent *pos = p_world->get_component<Position2dComponent>(e);
+		float delta = world->get_resource<DeltaTime>().delta;
+		while (entities.next(e)) {
+			components::Transform2dComp *trans = world->get_component<components::Transform2dComp>(e);
+			const VelocityComp *velocity = world->get_component<VelocityComp>(e);
 
-			pos->position.x += 100 * delta;
+			trans->transform.translate(velocity->velocity * delta);
 		}
+	}
+
+	virtual void init(EcsWorld *world) {
+		world->register_component<VelocityComp>();
+
+		world->system_add_writing_component<MoveSystem, components::Transform2dComp>();
+		world->system_add_reading_component<MoveSystem, VelocityComp>();
+		world->system_add_reading_resource<MoveSystem, DeltaTime>();
 	}
 };
 
@@ -33,27 +45,38 @@ class TestState : public State {
 
 	// State interface
 public:
-	virtual void on_start(EcsWorld *p_world) {
+	virtual void on_start(EcsWorld *world) {
 
-		p_world->register_tag<MoveTag>();
+		world->register_system<MoveSystem>("Move");
 
-		p_world->register_system<MoveSystem>("Move");
-		p_world->system_add_writing_component<MoveSystem, Position2dComponent>();
-		p_world->system_add_required_tag<MoveSystem, MoveTag>();
+		circle_a = world->create_entity();
+		circle_b = world->create_entity();
 
-		p_world->update_system_scheduler();
+		world->add_component_with_data(circle_a,
+		                components::CanvasCircle{
+		                                Point2(100, 100),
+		                                50,
+		                                Color(0.5, 1.0, 1.0) });
+		world->add_component_with_data(circle_a,
+		                components::CanvasRect{
+		                                Rect2(Point2(0, 0), Point2(50, 50)),
+		                                Color(0.0, 1.0, 0.0) });
+		world->add_component_with_data(circle_b,
+		                components::CanvasRect{
+		                                Rect2(Point2(0, 0), Point2(50, 50)),
+		                                Color(1.0, 1.0, 0.0) });
 
-		circle_a = p_world->create_entity();
-		circle_b = p_world->create_entity();
+		world->add_component_with_data(circle_a, components::Transform2dComp{ Transform2D(0.0, Vector2(100, 100)) });
+		world->add_component_with_data(circle_b, components::Transform2dComp{ Transform2D(0.0, Vector2(200, 50)) });
 
-		p_world->add_component_with_data(circle_a, Position2dComponent{ Point2(100, 100) });
-		p_world->add_component_with_data(circle_b, Position2dComponent{ Point2(200, 200) });
+		world->add_component_with_data(circle_a, VelocityComp{ Vector2(50, 25) });
+		world->add_component_with_data(circle_b, VelocityComp{ Vector2(0, 50) });
 
-		p_world->add_component_with_data(circle_a, CircleComponent{ 50.0, Color(1.0, 0.0, 0.0) });
-		p_world->add_component_with_data(circle_b, CircleComponent{ 25, Color(0.0, 0.0, 1.0) });
+		world->add_tag<components::CanvasItemTag>(circle_a);
+		world->add_tag<components::CanvasItemTag>(circle_b);
 	}
 
-	virtual Transition handle_notification(EcsWorld *p_world, int p_notification) {
+	virtual Transition handle_notification(EcsWorld *world, int p_notification) {
 		switch (p_notification) {
 			case MainLoop::NOTIFICATION_WM_QUIT_REQUEST: {
 				return Transition::quit;
@@ -62,22 +85,12 @@ public:
 
 		return Transition::none;
 	}
-	virtual Transition update(EcsWorld *p_world) {
+	virtual Transition update(EcsWorld *world) {
 
 		return Transition::none;
 	}
 
-	virtual Transition handle_event(EcsWorld *p_world, const Ref<InputEvent> &p_event) {
-		const InputEventKey *key = Object::cast_to<InputEventKey>(*p_event);
-		if (key) {
-			if (key->is_pressed() && !key->is_echo()) {
-				p_world->add_tag<MoveTag>(circle_b);
-			}
-
-			if (!key->is_pressed()) {
-				p_world->remove_tag<MoveTag>(circle_b);
-			}
-		}
+	virtual Transition handle_event(EcsWorld *world, const Ref<InputEvent> &p_event) {
 		return Transition::none;
 	}
 };
@@ -90,28 +103,11 @@ void EcsMainLoop::init() {
 	EcsWorld *world = create_world();
 
 	// register components
-	world->register_component<Position2dComponent>();
-	world->register_component<CircleComponent>();
-
-	VisualServer *vs = VS::get_singleton();
-	RID vp = vs->viewport_create();
-	RID canvas = vs->canvas_create();
-
-	Size2i screen_size = OS::get_singleton()->get_window_size();
-	vs->viewport_attach_canvas(vp, canvas);
-	vs->viewport_set_size(vp, screen_size.x, screen_size.y);
-	vs->viewport_attach_to_screen(vp, Rect2(Vector2(), screen_size));
-	vs->viewport_set_active(vp, true);
-
-	RID ci = vs->canvas_item_create();
-	vs->canvas_item_set_parent(ci, canvas);
+	world->register_component<components::TransformComp>();
+	world->register_component<components::Transform2dComp>();
 
 	// register systems
-	world->register_system_custom("ViewportSystem", new ViewportSystem(ci));
-	world->system_add_reading_component<ViewportSystem, CircleComponent>();
-	world->system_add_reading_component<ViewportSystem, Position2dComponent>();
-
-	world->update_system_scheduler();
+	world->register_system<systems::Canvas>("Canvas");
 
 	// set states
 	TestState *test_state = new TestState;
