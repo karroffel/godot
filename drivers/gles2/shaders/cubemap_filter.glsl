@@ -56,7 +56,7 @@ uniform bool z_flip;
 
 void main() {
 
-	gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+	gl_FragColor = vec4(vec3(1.0) / vec3(roughness), 1.0);
 
 }
 

@@ -82,7 +82,7 @@ uniform float custom_alpha;
 
 #if defined(USE_PANORAMA) || defined(USE_ASYM_PANO)
 
-vec4 texturePanorama(vec3 normal, sampler2D pano) {
+vec4 texturePanorama(sampler2D pano, vec3 normal) {
 
 	vec2 st = vec2(
 	        atan(normal.x, normal.z),
@@ -104,7 +104,7 @@ void main() {
 
 #ifdef USE_PANORAMA
 
-	vec4 color = texturePanorama(normalize(cube_interp), source);
+	vec4 color = texturePanorama(source, normalize(cube_interp));
 
 #elif defined(USE_CUBEMAP)
 	vec4 color = textureCube(source_cube, normalize(cube_interp));

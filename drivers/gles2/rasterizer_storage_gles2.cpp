@@ -796,150 +796,7 @@ void RasterizerStorageGLES2::texture_set_detect_normal_callback(RID p_texture, V
 
 RID RasterizerStorageGLES2::texture_create_radiance_cubemap(RID p_source, int p_resolution) const {
 
-	// Okay, so we bind the source texture to TEXTURE0, then we create a new texture
-	// that's in TEXTURE1, which will be the new cubemap.
-	//
-	// That new cubemap will be used as a skybox and will also be "laid on top" of meshes.
-	// The cubemap_filter shader creates blurred versions of that cubemap, which will be
-	// stored in the mipmaps. So increased roughness of a fragment means looking into
-	// a more blurred cubemap mipmap.
-
-	Texture *texture = texture_owner.get(p_source);
-	ERR_FAIL_COND_V(!texture, RID());
-	ERR_FAIL_COND_V(!(texture->flags & VS::TEXTURE_FLAG_CUBEMAP), RID());
-
-	if (p_resolution < 0) {
-		p_resolution = texture->width;
-	}
-
-	// glBindVertexArray(0) should be here, but nooooo this is GLES2...
-	{
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-		glDisable(GL_CULL_FACE);
-		glDisable(GL_DEPTH_TEST);
-		glDisable(GL_SCISSOR_TEST);
-		glDisable(GL_BLEND);
-
-		for (int i = 0; i < VS::ARRAY_MAX - 1; i++) {
-			glDisableVertexAttribArray(i);
-		}
-	}
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(texture->target, texture->tex_id);
-
-	// TODO: test for srgb maybe?
-
-	// New cubemap that will hold the mipmaps with different roughness values
-	glActiveTexture(GL_TEXTURE1);
-	GLuint new_cubemap;
-	glGenTextures(1, &new_cubemap);
-	glBindTexture(GL_TEXTURE_CUBE_MAP, new_cubemap);
-
-	// Now we create a new framebuffer. The new cubemap images will be used as
-	// attachements for it, so we can fill them by issuing draw calls.
-	GLuint tmp_fb;
-
-	glGenFramebuffers(1, &tmp_fb);
-	glBindFramebuffer(GL_FRAMEBUFFER, tmp_fb);
-
-	int size = p_resolution;
-
-	int lod = 0;
-
-	shaders.cubemap_filter.bind();
-
-	int mipmaps = 6;
-
-	int mm_level = mipmaps;
-
-	GLenum internal_format = GL_RGBA;
-	GLenum format = GL_RGBA;
-	GLenum type = GL_UNSIGNED_BYTE; // This is suboptimal... TODO other format for FBO?
-
-	// Set the initial (empty) mipmaps
-	while (mm_level) {
-
-		for (int i = 0; i < 6; i++) {
-			glTexImage2D(_cube_side_enum[i], lod, internal_format, size, size, 0, format, type, NULL);
-		}
-
-		lod++;
-		mm_level--;
-
-		if (size > 1)
-			size >>= 1;
-	}
-
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_BASE_LEVEL, 0);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAX_LEVEL, lod - 1);
-
-	lod = 0;
-	mm_level = mipmaps;
-
-	size = p_resolution;
-
-	// now render to the framebuffer, mipmap level for mipmap level
-	while (mm_level) {
-
-		for (int i = 0; i < 6; i++) {
-			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, _cube_side_enum[i], new_cubemap, lod);
-
-			glViewport(0, 0, size, size);
-
-			bind_quad_array();
-
-			shaders.cubemap_filter.set_uniform(CubemapFilterShaderGLES2::FACE_ID, i);
-			shaders.cubemap_filter.set_uniform(CubemapFilterShaderGLES2::ROUGHNESS, 1 / (float)(mipmaps - 1));
-
-			glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-		}
-
-		if (size > 1)
-			size >>= 1;
-
-		lod++;
-		mm_level--;
-	}
-
-	// restore ranges
-
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_BASE_LEVEL, 0);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAX_LEVEL, lod - 1);
-
-	glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-	// Framebuffer did its job. thank mr framebuffer
-	glBindFramebuffer(GL_FRAMEBUFFER, RasterizerStorageGLES2::system_fbo);
-	glDeleteFramebuffers(1, &tmp_fb);
-
-	Texture *ctex = memnew(Texture);
-
-	ctex->flags = VS::TEXTURE_FLAG_CUBEMAP | VS::TEXTURE_FLAG_MIPMAPS | VS::TEXTURE_FLAG_FILTER;
-	ctex->width = p_resolution;
-	ctex->height = p_resolution;
-	ctex->alloc_width = p_resolution;
-	ctex->alloc_height = p_resolution;
-	ctex->format = Image::FORMAT_RGBA8;
-	ctex->target = GL_TEXTURE_CUBE_MAP;
-	ctex->gl_format_cache = format;
-	ctex->gl_internal_format_cache = internal_format;
-	ctex->gl_type_cache = type;
-	ctex->data_size = 0;
-	ctex->compressed = false;
-	ctex->total_data_size = 0;
-	ctex->ignore_mipmaps = false;
-	ctex->mipmaps = mipmaps;
-	ctex->active = true;
-	ctex->tex_id = new_cubemap;
-	ctex->stored_cube_sides = (1 << 6) - 1;
-	ctex->render_target = NULL;
-
-	return texture_owner.make_rid(ctex);
+	return RID();
 }
 
 RID RasterizerStorageGLES2::sky_create() {
@@ -991,10 +848,13 @@ void RasterizerStorageGLES2::sky_set_texture(RID p_sky, RID p_panorama, int p_ra
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); //need this for proper sampling
 
+	// New cubemap that will hold the mipmaps with different roughness values
 	glActiveTexture(GL_TEXTURE1);
 	glGenTextures(1, &sky->radiance);
-	glBindTexture(GL_TEXTURE_2D, sky->radiance);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
 
+	// Now we create a new framebuffer. The new cubemap images will be used as
+	// attachements for it, so we can fill them by issuing draw calls.
 	GLuint tmp_fb;
 
 	glGenFramebuffers(1, &tmp_fb);
@@ -1002,35 +862,54 @@ void RasterizerStorageGLES2::sky_set_texture(RID p_sky, RID p_panorama, int p_ra
 
 	int size = p_radiance_size;
 
+	int lod = 0;
+
+	shaders.cubemap_filter.set_conditional(CubemapFilterShaderGLES2::USE_SOURCE_PANORAMA, texture->target == GL_TEXTURE_2D);
+
+	shaders.cubemap_filter.bind();
+
 	int mipmaps = 6;
+
+	int mm_level = mipmaps;
 
 	GLenum internal_format = GL_RGBA;
 	GLenum format = GL_RGBA;
 	GLenum type = GL_UNSIGNED_BYTE; // This is suboptimal... TODO other format for FBO?
 
-	glTexStorage2DCustom(GL_TEXTURE_2D, mipmaps, internal_format, size, size * 2.0, format, type);
-
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, mipmaps - 1);
-
-	int lod = 0;
-
-	int mm_level = mipmaps;
-
-	shaders.cubemap_filter.set_conditional(CubemapFilterShaderGLES2::USE_SOURCE_PANORAMA, true);
-	shaders.cubemap_filter.bind();
-
+	// Set the initial (empty) mipmaps
 	while (mm_level) {
 
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, sky->radiance, lod);
+		for (int i = 0; i < 6; i++) {
+			glTexImage2D(_cube_side_enum[i], lod, internal_format, size, size, 0, format, type, NULL);
+		}
 
-		for (int i = 0; i < 2; i++) {
-			glViewport(0, i * size, size, size);
+		lod++;
+		mm_level--;
+
+		if (size > 1)
+			size >>= 1;
+	}
+
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_BASE_LEVEL, 0);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAX_LEVEL, lod - 1);
+
+	lod = 0;
+	mm_level = mipmaps;
+
+	size = p_radiance_size;
+
+	// now render to the framebuffer, mipmap level for mipmap level
+	while (mm_level) {
+
+		for (int i = 0; i < 6; i++) {
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, _cube_side_enum[i], sky->radiance, lod);
+
+			glViewport(0, 0, size, size);
 
 			bind_quad_array();
 
-			shaders.cubemap_filter.set_uniform(CubemapFilterShaderGLES2::Z_FLIP, i > 0);
-			shaders.cubemap_filter.set_uniform(CubemapFilterShaderGLES2::ROUGHNESS, lod / ((float)mipmaps - 1));
+			shaders.cubemap_filter.set_uniform(CubemapFilterShaderGLES2::FACE_ID, i);
+			shaders.cubemap_filter.set_uniform(CubemapFilterShaderGLES2::ROUGHNESS, lod / (float)(mipmaps - 1));
 
 			glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 		}
@@ -1042,16 +921,17 @@ void RasterizerStorageGLES2::sky_set_texture(RID p_sky, RID p_panorama, int p_ra
 		mm_level--;
 	}
 
-	shaders.cubemap_filter.set_conditional(CubemapFilterShaderGLES2::USE_SOURCE_PANORAMA, false);
+	// restore ranges
 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, lod - 1);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_BASE_LEVEL, 0);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAX_LEVEL, lod - 1);
 
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
+	// Framebuffer did its job. thank mr framebuffer
 	glBindFramebuffer(GL_FRAMEBUFFER, RasterizerStorageGLES2::system_fbo);
 	glDeleteFramebuffers(1, &tmp_fb);
 }
@@ -1250,8 +1130,9 @@ void RasterizerStorageGLES2::_update_shader(Shader *p_shader) const {
 	shader_get_param_list(p_shader->self, &params);
 
 	for (List<PropertyInfo>::Element *E = params.front(); E; E = E->next()) {
-		p_shader->uniform_locations[E->get().name] = p_shader->shader->get_uniform_location(String("m_") + E->get().name);
-		if (p_shader->uniform_locations[E->get().name] < 0) {
+		GLint loc = p_shader->shader->get_uniform_location(String("m_") + E->get().name);
+		p_shader->uniform_locations[E->get().name] = loc;
+		if (loc < 0) {
 			p_shader->uniform_locations[E->get().name] = p_shader->shader->get_uniform_location(E->get().name);
 		}
 	}
