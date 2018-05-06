@@ -126,6 +126,7 @@ VERTEX_SHADER_CODE
 }
 
 [fragment]
+#extension GL_ARB_shader_texture_lod : require
 
 #ifdef USE_GLES_OVER_GL
 #define mediump
@@ -222,8 +223,13 @@ FRAGMENT_SHADER_CODE
 #endif
 
 #ifdef USE_RADIANCE_MAP
-	vec3 uv_env = normalize(vertex_interp.xyz);
-	vec4 cube_color = textureCubeLod(radiance_map, uv_env, 1.0);
+	mat4 the_good_model_matrix = model_matrix;
+	the_good_model_matrix[3] = vec4(0.0, 0.0, 0.0, 1.0);
+
+	vec3 uv_env = normalize((the_good_model_matrix * vec4(vertex_interp, 1.0)).xyz);
+	uv_env.x *= -1.0;
+	uv_env.z *= -1.0;
+	vec4 cube_color = textureCubeLod(radiance_map, uv_env, roughness * RADIANCE_MAX_LOD);
 	albedo = cube_color.xyz;
 #endif
 
