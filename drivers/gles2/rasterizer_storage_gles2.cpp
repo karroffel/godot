@@ -1013,7 +1013,6 @@ void RasterizerStorageGLES2::_update_shader(Shader *p_shader) const {
 	p_shader->valid = false;
 
 	p_shader->uniforms.clear();
-	p_shader->uniform_locations.clear();
 
 	ShaderCompilerGLES2::GeneratedCode gen_code;
 	ShaderCompilerGLES2::IdentifierActions *actions = NULL;
@@ -1125,17 +1124,6 @@ void RasterizerStorageGLES2::_update_shader(Shader *p_shader) const {
 	p_shader->shader->bind();
 
 	// cache uniform locations
-
-	List<PropertyInfo> params;
-	shader_get_param_list(p_shader->self, &params);
-
-	for (List<PropertyInfo>::Element *E = params.front(); E; E = E->next()) {
-		GLint loc = p_shader->shader->get_uniform_location(String("m_") + E->get().name);
-		p_shader->uniform_locations[E->get().name] = loc;
-		if (loc < 0) {
-			p_shader->uniform_locations[E->get().name] = p_shader->shader->get_uniform_location(E->get().name);
-		}
-	}
 
 	for (SelfList<Material> *E = p_shader->materials.first(); E; E = E->next()) {
 		_material_make_dirty(E->self());
@@ -1360,8 +1348,6 @@ void RasterizerStorageGLES2::material_set_param(RID p_material, const StringName
 
 	if (p_value.get_type() == Variant::NIL) {
 		material->params.erase(p_param);
-		// unset in shader too
-		material->param_unset.insert(p_param);
 	} else {
 		material->params[p_param] = p_value;
 	}

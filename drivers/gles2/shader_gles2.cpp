@@ -525,9 +525,8 @@ ShaderGLES2::Version *ShaderGLES2::get_current_version() {
 	}
 
 	if (cc) {
-		v.custom_uniform_locations.resize(cc->custom_uniforms.size());
 		for (int i = 0; i < cc->custom_uniforms.size(); i++) {
-			v.custom_uniform_locations.write[i] = glGetUniformLocation(v.id, String(cc->custom_uniforms[i]).ascii().get_data());
+			v.custom_uniform_locations.write[cc->custom_uniforms[i]] = glGetUniformLocation(v.id, (String("m_") + cc->custom_uniforms[i]).ascii().get_data());
 		}
 	}
 
@@ -709,6 +708,13 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 
 	if (!material->shader) {
 		return;
+	}
+
+	Version *v = version_map.getptr(conditional_version);
+
+	CustomCode *cc = NULL;
+	if (v) {
+		cc = custom_code_map.getptr(v->code_version);
 	}
 
 	// bind uniforms
@@ -985,14 +991,14 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 		// GLint location = get_uniform_location(E->key());
 
 		GLint location;
-		if (material->shader->uniform_locations.has(E->key())) {
-			location = material->shader->uniform_locations[E->key()];
+		if (v->custom_uniform_locations.has(E->key())) {
+			location = v->custom_uniform_locations[E->key()];
 		} else {
-			int idx = version->uniform_names.find(E->key()); // TODO maybe put those in a Map?
+			int idx = v->uniform_names.find(E->key()); // TODO maybe put those in a Map?
 			if (idx < 0) {
 				location = -1;
 			} else {
-				location = version->uniform_location[idx];
+				location = v->uniform_location[idx];
 			}
 		}
 
@@ -1018,8 +1024,8 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 		//	location = material->shader->uniform_locations[textures[i].first];
 		// }
 		GLint location = -1;
-		if (material->shader->uniform_locations.has(textures[i].first)) {
-			location = material->shader->uniform_locations[textures[i].first];
+		if (v->custom_uniform_locations.has(textures[i].first)) {
+			location = v->custom_uniform_locations[textures[i].first];
 		} else {
 			location = get_uniform_location(textures[i].first);
 		}

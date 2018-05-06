@@ -154,6 +154,13 @@ uniform highp float time;
 uniform vec2 screen_pixel_size;
 #endif
 
+#ifdef USE_RADIANCE_MAP
+
+#define RADIANCE_MAX_LOD 5.0
+
+uniform samplerCube radiance_map; // texunit:0
+#endif
+
 //
 // varyings
 //
@@ -212,6 +219,12 @@ FRAGMENT_SHADER_CODE
 	if (alpha < alpha_scissor) {
 		discard;
 	}
+#endif
+
+#ifdef USE_RADIANCE_MAP
+	vec3 uv_env = normalize(vertex_interp.xyz);
+	vec4 cube_color = textureCubeLod(radiance_map, uv_env, 1.0);
+	albedo = cube_color.xyz;
 #endif
 
 	gl_FragColor = vec4(albedo, alpha);

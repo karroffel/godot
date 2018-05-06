@@ -113,7 +113,7 @@ private:
 		Vector<StringName> uniform_names;
 		GLint *uniform_location;
 		Vector<GLint> texture_uniform_locations;
-		Vector<GLint> custom_uniform_locations;
+		Map<StringName, GLint> custom_uniform_locations;
 		uint32_t code_version;
 		bool ok;
 		Version() {
