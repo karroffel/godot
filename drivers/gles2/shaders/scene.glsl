@@ -228,10 +228,8 @@ FRAGMENT_SHADER_CODE
 
 #ifdef USE_RADIANCE_MAP
 
-	vec3 ref_vec = reflect(-eye_vec, normal);
-
 	// albedo = vec3(roughness);
-	albedo = clamp(textureCubeLod(radiance_map, ref_vec, roughness * 128.0).xyz, vec3(0.0), vec3(1.0));
+	albedo += textureCubeLod(radiance_map, vertex_interp, roughness * 5.0).xyz;
 	//albedo *= roughness * RADIANCE_MAX_LOD;
 #endif
 

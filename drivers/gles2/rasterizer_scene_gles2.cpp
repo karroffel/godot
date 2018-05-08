@@ -403,9 +403,11 @@ void RasterizerSceneGLES2::_setup_material(RasterizerStorageGLES2::Material *p_m
 
 	ShaderLanguage::ShaderNode::Uniform::Hint *texture_hints = p_material->shader->texture_hints.ptrw();
 
+	int num_default_tex = p_use_radiance_map ? 1 : 0;
+
 	for (int i = 0; i < tc; i++) {
 
-		glActiveTexture(GL_TEXTURE0 + i);
+		glActiveTexture(GL_TEXTURE0 + num_default_tex + i);
 
 		RasterizerStorageGLES2::Texture *t = storage->texture_owner.getornull(textures[i].second);
 
@@ -434,7 +436,7 @@ void RasterizerSceneGLES2::_setup_material(RasterizerStorageGLES2::Material *p_m
 
 		glBindTexture(t->target, t->tex_id);
 	}
-	state.scene_shader.use_material((void *)p_material, 0);
+	state.scene_shader.use_material((void *)p_material, num_default_tex);
 }
 
 void RasterizerSceneGLES2::_setup_geometry(RenderList::Element *p_element, RasterizerStorageGLES2::Skeleton *p_skeleton) {

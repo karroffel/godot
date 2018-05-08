@@ -36,7 +36,7 @@
 #include "rasterizer_gles2.h"
 #include "rasterizer_storage_gles2.h"
 
-//#define DEBUG_OPENGL
+// #define DEBUG_OPENGL
 
 // #include "shaders/copy.glsl.gen.h"
 
@@ -57,7 +57,7 @@
 
 ShaderGLES2 *ShaderGLES2::active = NULL;
 
-//#define DEBUG_SHADER
+#define DEBUG_SHADER
 
 #ifdef DEBUG_SHADER
 
@@ -414,6 +414,10 @@ ShaderGLES2::Version *ShaderGLES2::get_current_version() {
 	strings.push_back(fragment_code3.get_data());
 
 #ifdef DEBUG_SHADER
+
+	if (cc) {
+		DEBUG_PRINT("\nFragment Code:\n\n" + String(cc->fragment_globals));
+	}
 	DEBUG_PRINT("\nFragment Code:\n\n" + String(code_string.get_data()));
 #endif
 
@@ -525,8 +529,18 @@ ShaderGLES2::Version *ShaderGLES2::get_current_version() {
 	}
 
 	if (cc) {
+		// uniforms
 		for (int i = 0; i < cc->custom_uniforms.size(); i++) {
-			v.custom_uniform_locations.write[cc->custom_uniforms[i]] = glGetUniformLocation(v.id, (String("m_") + cc->custom_uniforms[i]).ascii().get_data());
+			StringName native_uniform_name = "m_" + cc->custom_uniforms[i];
+			GLint location = glGetUniformLocation(v.id, ((String)native_uniform_name).ascii().get_data());
+			v.custom_uniform_locations.write[cc->custom_uniforms[i]] = location;
+		}
+
+		// textures
+		for (int i = 0; i < cc->texture_uniforms.size(); i++) {
+			StringName native_uniform_name = "m_" + cc->texture_uniforms[i];
+			GLint location = glGetUniformLocation(v.id, ((String)native_uniform_name).ascii().get_data());
+			v.custom_uniform_locations.write[cc->texture_uniforms[i]] = location;
 		}
 	}
 
@@ -684,6 +698,7 @@ void ShaderGLES2::set_custom_shader_code(uint32_t p_code_id,
 	cc->light = p_light;
 	cc->custom_uniforms = p_uniforms;
 	cc->custom_defines = p_custom_defines;
+	cc->texture_uniforms = p_texture_uniforms;
 	cc->version++;
 }
 
