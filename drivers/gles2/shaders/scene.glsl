@@ -199,6 +199,8 @@ void main() {
 	float anisotropy = 1.0;
 	vec2 anisotropy_flow = vec2(1.0,0.0);
 
+	vec3 normal = normalize(normal_interp);
+
 	float alpha = 1.0;
 
 #ifdef ALPHA_SCISSOR_USED
@@ -216,6 +218,8 @@ FRAGMENT_SHADER_CODE
 
 }
 
+	vec3 eye_vec = -normalize(vertex_interp);
+
 #ifdef ALPHA_SCISSOR_USED
 	if (alpha < alpha_scissor) {
 		discard;
@@ -223,14 +227,12 @@ FRAGMENT_SHADER_CODE
 #endif
 
 #ifdef USE_RADIANCE_MAP
-	mat4 the_good_model_matrix = model_matrix;
-	the_good_model_matrix[3] = vec4(0.0, 0.0, 0.0, 1.0);
 
-	vec3 uv_env = normalize((the_good_model_matrix * vec4(vertex_interp, 1.0)).xyz);
-	uv_env.x *= -1.0;
-	uv_env.z *= -1.0;
-	vec4 cube_color = textureCubeLod(radiance_map, uv_env, roughness * RADIANCE_MAX_LOD);
-	albedo = cube_color.xyz;
+	vec3 ref_vec = reflect(-eye_vec, normal);
+
+	// albedo = vec3(roughness);
+	albedo = clamp(textureCubeLod(radiance_map, ref_vec, roughness * 128.0).xyz, vec3(0.0), vec3(1.0));
+	//albedo *= roughness * RADIANCE_MAX_LOD;
 #endif
 
 	gl_FragColor = vec4(albedo, alpha);

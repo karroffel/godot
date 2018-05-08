@@ -157,7 +157,7 @@ void main() {
 	color = texturePanorama(source_panorama, N).xyz;
 #endif
 
-	gl_FragColor = vec4(color * (1.0 - roughness), 1.0);
+	gl_FragColor = mix(vec4(color, 1.0), vec4(1.0), roughness);
 
 }
 
