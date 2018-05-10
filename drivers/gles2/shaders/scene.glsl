@@ -74,7 +74,6 @@ varying vec2 uv2_interp;
 #endif
 
 
-
 VERTEX_SHADER_GLOBALS
 
 void main() {
@@ -121,7 +120,17 @@ VERTEX_SHADER_CODE
 
 	vec4 outvec = vec4(vertex_interp, 1.0);
 
-	gl_Position = (projection_matrix * (camera_matrix * (model_matrix_copy * outvec)));
+	mat4 modelview = camera_matrix * model_matrix_copy;
+
+	vec4 model_vec = model_matrix_copy * outvec;
+	vec4 camera_vec = camera_matrix * model_vec;
+	vec4 projected_vec = projection_matrix * camera_vec;
+
+	vertex_interp = camera_vec.xyz;
+
+	normal_interp = normalize((modelview * vec4(normal_interp, 0.0)).xyz);
+
+	gl_Position = projected_vec;
 
 }
 
@@ -160,6 +169,9 @@ uniform vec2 screen_pixel_size;
 #define RADIANCE_MAX_LOD 5.0
 
 uniform samplerCube radiance_map; // texunit:0
+
+uniform mat4 radiance_inverse_xform;
+
 #endif
 
 //
@@ -180,6 +192,8 @@ varying vec2 uv_interp;
 #ifdef ENABLE_UV2_INTERP
 varying vec2 uv2_interp;
 #endif
+
+varying vec3 view_interp;
 
 FRAGMENT_SHADER_GLOBALS
 
@@ -218,8 +232,6 @@ FRAGMENT_SHADER_CODE
 
 }
 
-	vec3 eye_vec = -normalize(vertex_interp);
-
 #ifdef ALPHA_SCISSOR_USED
 	if (alpha < alpha_scissor) {
 		discard;
@@ -228,9 +240,15 @@ FRAGMENT_SHADER_CODE
 
 #ifdef USE_RADIANCE_MAP
 
-	// albedo = vec3(roughness);
-	albedo += textureCubeLod(radiance_map, vertex_interp, roughness * 5.0).xyz;
-	//albedo *= roughness * RADIANCE_MAX_LOD;
+	vec3 eye_position = -normalize(vertex_interp);
+	vec3 N = normal_interp;
+
+	vec3 ref_vec = reflect(-eye_position, N);
+	ref_vec = normalize((radiance_inverse_xform * vec4(ref_vec, 0.0)).xyz);
+
+	ref_vec.xz *= -1.0;
+
+	albedo += textureCubeLod(radiance_map, ref_vec, roughness * 5.0).xyz;
 #endif
 
 	gl_FragColor = vec4(albedo, alpha);

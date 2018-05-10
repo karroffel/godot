@@ -677,6 +677,9 @@ void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList:
 		_setup_geometry(e, skeleton);
 
 		_setup_material(material, use_radiance_map);
+		if (use_radiance_map) {
+			state.scene_shader.set_uniform(SceneShaderGLES2::RADIANCE_INVERSE_XFORM, p_view_transform);
+		}
 
 		if (p_alpha_pass || p_directional_add) {
 			int desired_blend_mode;
