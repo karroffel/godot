@@ -74,74 +74,54 @@ vec4 texturePanorama(sampler2D pano, vec3 normal) {
 
 #endif
 
-vec3 texelCoordToVec(vec2 uv, int faceID)
-{
-    mat3 faceUvVectors[6];
-/*
-    // -x
-    faceUvVectors[1][0] = vec3(0.0, 0.0, 1.0);  // u -> +z
-    faceUvVectors[1][1] = vec3(0.0, -1.0, 0.0); // v -> -y
-    faceUvVectors[1][2] = vec3(-1.0, 0.0, 0.0); // -x face
+vec3 texelCoordToVec(vec2 uv, int faceID) {
+	mat3 faceUvVectors[6];
 
-    // +x
-    faceUvVectors[0][0] = vec3(0.0, 0.0, -1.0); // u -> -z
-    faceUvVectors[0][1] = vec3(0.0, -1.0, 0.0); // v -> -y
-    faceUvVectors[0][2] = vec3(1.0, 0.0, 0.0);  // +x face
+	// -x
+	faceUvVectors[0][0] = vec3(0.0, 0.0, 1.0);  // u -> +z
+	faceUvVectors[0][1] = vec3(0.0, -1.0, 0.0); // v -> -y
+	faceUvVectors[0][2] = vec3(-1.0, 0.0, 0.0); // -x face
 
-    // -y
-    faceUvVectors[3][0] = vec3(1.0, 0.0, 0.0);  // u -> +x
-    faceUvVectors[3][1] = vec3(0.0, 0.0, -1.0); // v -> -z
-    faceUvVectors[3][2] = vec3(0.0, -1.0, 0.0); // -y face
+	// +x
+	faceUvVectors[1][0] = vec3(0.0, 0.0, -1.0); // u -> -z
+	faceUvVectors[1][1] = vec3(0.0, -1.0, 0.0); // v -> -y
+	faceUvVectors[1][2] = vec3(1.0, 0.0, 0.0);  // +x face
 
-    // +y
-    faceUvVectors[2][0] = vec3(1.0, 0.0, 0.0);  // u -> +x
-    faceUvVectors[2][1] = vec3(0.0, 0.0, 1.0);  // v -> +z
-    faceUvVectors[2][2] = vec3(0.0, 1.0, 0.0);  // +y face
+	// -y
+	faceUvVectors[2][0] = vec3(1.0, 0.0, 0.0);  // u -> +x
+	faceUvVectors[2][1] = vec3(0.0, 0.0, -1.0); // v -> -z
+	faceUvVectors[2][2] = vec3(0.0, -1.0, 0.0); // -y face
 
-    // -z
-    faceUvVectors[5][0] = vec3(-1.0, 0.0, 0.0); // u -> -x
-    faceUvVectors[5][1] = vec3(0.0, -1.0, 0.0); // v -> -y
-    faceUvVectors[5][2] = vec3(0.0, 0.0, -1.0); // -z face
+	// +y
+	faceUvVectors[3][0] = vec3(1.0, 0.0, 0.0);  // u -> +x
+	faceUvVectors[3][1] = vec3(0.0, 0.0, 1.0);  // v -> +z
+	faceUvVectors[3][2] = vec3(0.0, 1.0, 0.0);  // +y face
 
-    // +z
-    faceUvVectors[4][0] = vec3(1.0, 0.0, 0.0);  // u -> +x
-    faceUvVectors[4][1] = vec3(0.0, -1.0, 0.0); // v -> -y
-    faceUvVectors[4][2] = vec3(0.0, 0.0, 1.0);  // +z face
-*/
+	// -z
+	faceUvVectors[4][0] = vec3(-1.0, 0.0, 0.0); // u -> -x
+	faceUvVectors[4][1] = vec3(0.0, -1.0, 0.0); // v -> -y
+	faceUvVectors[4][2] = vec3(0.0, 0.0, -1.0); // -z face
 
-    // -x
-    faceUvVectors[0][0] = vec3(0.0, 0.0, 1.0);  // u -> +z
-    faceUvVectors[0][1] = vec3(0.0, -1.0, 0.0); // v -> -y
-    faceUvVectors[0][2] = vec3(-1.0, 0.0, 0.0); // -x face
+	// +z
+	faceUvVectors[5][0] = vec3(1.0, 0.0, 0.0);  // u -> +x
+	faceUvVectors[5][1] = vec3(0.0, -1.0, 0.0); // v -> -y
+	faceUvVectors[5][2] = vec3(0.0, 0.0, 1.0);  // +z face
 
-    // +x
-    faceUvVectors[1][0] = vec3(0.0, 0.0, -1.0); // u -> -z
-    faceUvVectors[1][1] = vec3(0.0, -1.0, 0.0); // v -> -y
-    faceUvVectors[1][2] = vec3(1.0, 0.0, 0.0);  // +x face
+	// out = u * s_faceUv[0] + v * s_faceUv[1] + s_faceUv[2].
+	vec3 result = (faceUvVectors[faceID][0] * uv.x) + (faceUvVectors[faceID][1] * uv.y) + faceUvVectors[faceID][2];
+	return normalize(result);
+}
 
-    // -y
-    faceUvVectors[2][0] = vec3(1.0, 0.0, 0.0);  // u -> +x
-    faceUvVectors[2][1] = vec3(0.0, 0.0, -1.0); // v -> -z
-    faceUvVectors[2][2] = vec3(0.0, -1.0, 0.0); // -y face
+vec3 ImportanceSampleGGX(vec2 Xi, float Roughness, vec3 N) {
+	return vec3(0.0);
+}
 
-    // +y
-    faceUvVectors[3][0] = vec3(1.0, 0.0, 0.0);  // u -> +x
-    faceUvVectors[3][1] = vec3(0.0, 0.0, 1.0);  // v -> +z
-    faceUvVectors[3][2] = vec3(0.0, 1.0, 0.0);  // +y face
+float radical_inverse_VdC(int i) {
+	return 1.0;
+}
 
-    // -z
-    faceUvVectors[4][0] = vec3(-1.0, 0.0, 0.0); // u -> -x
-    faceUvVectors[4][1] = vec3(0.0, -1.0, 0.0); // v -> -y
-    faceUvVectors[4][2] = vec3(0.0, 0.0, -1.0); // -z face
-
-    // +z
-    faceUvVectors[5][0] = vec3(1.0, 0.0, 0.0);  // u -> +x
-    faceUvVectors[5][1] = vec3(0.0, -1.0, 0.0); // v -> -y
-    faceUvVectors[5][2] = vec3(0.0, 0.0, 1.0);  // +z face
-
-    // out = u * s_faceUv[0] + v * s_faceUv[1] + s_faceUv[2].
-    vec3 result = (faceUvVectors[faceID][0] * uv.x) + (faceUvVectors[faceID][1] * uv.y) + faceUvVectors[faceID][2];
-    return normalize(result);
+vec2 Hammersley(int i, int N) {
+	return vec2(float(i) / float(N), radical_inverse_VdC(i));
 }
 
 uniform bool z_flip;
@@ -157,7 +137,7 @@ void main() {
 	color = texturePanorama(source_panorama, N).xyz;
 #endif
 
-	gl_FragColor = mix(vec4(color, 1.0), vec4(1.0), roughness);
+	gl_FragColor = vec4(color, 1.0);
 
 }
 

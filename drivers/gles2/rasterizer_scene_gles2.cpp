@@ -335,6 +335,10 @@ void RasterizerSceneGLES2::_add_geometry_with_material(RasterizerStorageGLES2::G
 	e->sort_key |= uint64_t(e->geometry->index) << RenderList::SORT_KEY_GEOMETRY_INDEX_SHIFT;
 	e->sort_key |= uint64_t(e->instance->base_type) << RenderList::SORT_KEY_GEOMETRY_TYPE_SHIFT;
 
+	if (p_material->shader->spatial.unshaded) {
+		e->sort_key |= SORT_KEY_UNSHADED_FLAG;
+	}
+
 	if (!p_depth_pass) {
 		e->sort_key |= uint64_t(e->material->index) << RenderList::SORT_KEY_MATERIAL_INDEX_SHIFT;
 
@@ -674,9 +678,16 @@ void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList:
 
 		RasterizerStorageGLES2::Skeleton *skeleton = storage->skeleton_owner.getornull(e->instance->skeleton);
 
+		if (material->shader->spatial.unshaded) {
+			state.scene_shader.set_conditional(SceneShaderGLES2::USE_RADIANCE_MAP, false);
+		} else {
+			state.scene_shader.set_conditional(SceneShaderGLES2::USE_RADIANCE_MAP, use_radiance_map);
+		}
+
 		_setup_geometry(e, skeleton);
 
 		_setup_material(material, use_radiance_map);
+
 		if (use_radiance_map) {
 			state.scene_shader.set_uniform(SceneShaderGLES2::RADIANCE_INVERSE_XFORM, p_view_transform);
 		}
@@ -736,6 +747,8 @@ void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList:
 
 		_render_geometry(e);
 	}
+
+	state.scene_shader.set_conditional(SceneShaderGLES2::USE_RADIANCE_MAP, false);
 }
 
 void RasterizerSceneGLES2::_draw_sky(RasterizerStorageGLES2::Sky *p_sky, const CameraMatrix &p_projection, const Transform &p_transform, bool p_vflip, float p_custom_fov, float p_energy) {

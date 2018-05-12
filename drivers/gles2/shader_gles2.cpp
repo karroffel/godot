@@ -57,7 +57,7 @@
 
 ShaderGLES2 *ShaderGLES2::active = NULL;
 
-#define DEBUG_SHADER
+// #define DEBUG_SHADER
 
 #ifdef DEBUG_SHADER
 
