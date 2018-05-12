@@ -41,6 +41,7 @@ uniform int face_id;
 uniform float roughness;
 varying highp vec2 uv_interp;
 
+uniform sampler2D radical_inverse_vdc_cache; // texunit:1
 
 #define M_PI 3.14159265359
 
@@ -113,11 +114,29 @@ vec3 texelCoordToVec(vec2 uv, int faceID) {
 }
 
 vec3 ImportanceSampleGGX(vec2 Xi, float Roughness, vec3 N) {
-	return vec3(0.0);
+	float a = Roughness * Roughness; // DISNEY'S ROUGHNESS [see Burley'12 siggraph]
+
+	// Compute distribution direction
+	float Phi = 2.0 * M_PI * Xi.x;
+	float CosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y));
+	float SinTheta = sqrt(1.0 - CosTheta * CosTheta);
+
+	// Convert to spherical direction
+	vec3 H;
+	H.x = SinTheta * cos(Phi);
+	H.y = SinTheta * sin(Phi);
+	H.z = CosTheta;
+
+	vec3 UpVector = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+	vec3 TangentX = normalize(cross(UpVector, N));
+	vec3 TangentY = cross(N, TangentX);
+
+	// Tangent to world space
+	return TangentX * H.x + TangentY * H.y + N * H.z;
 }
 
 float radical_inverse_VdC(int i) {
-	return 1.0;
+	return texture2D(radical_inverse_vdc_cache, vec2(float(i) / 512.0, 0.0)).x;
 }
 
 vec2 Hammersley(int i, int N) {
@@ -133,11 +152,36 @@ void main() {
 	vec2 uv = (uv_interp * 2.0) - 1.0;
 	vec3 N = texelCoordToVec(uv, face_id);
 
+	vec4 sum = vec4(0.0);
+
+	for (int sample_num = 0; sample_num < SAMPLE_COUNT; sample_num++) {
+
+		vec2 xi = Hammersley(sample_num, SAMPLE_COUNT);
+
+		vec3 H = ImportanceSampleGGX(xi, roughness, N);
+		vec3 V = N;
+		vec3 L = normalize(2.0 * dot(V, H) * H - V);
+
+		float NdotL = clamp(dot(N, L), 0.0, 1.0);
+
+		if (NdotL > 0.0) {
+
 #ifdef USE_SOURCE_PANORAMA
-	color = texturePanorama(source_panorama, N).xyz;
+			sum.rgb += texturePanorama(source_panorama, H).rgb * NdotL;
+#else
+			H.y = -H.y;
+			sum.rgb += textureCubeLod(source_cube, H, 0.0).rgb * NdotL;
 #endif
 
-	gl_FragColor = vec4(color, 1.0);
+			sum.a += NdotL;
+
+		}
+
+	}
+
+	sum /= sum.a;
+
+	gl_FragColor = vec4(sum.rgb, 1.0);
 
 }
 

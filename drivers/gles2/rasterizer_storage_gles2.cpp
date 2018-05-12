@@ -353,6 +353,7 @@ void RasterizerStorageGLES2::texture_allocate(RID p_texture, int p_width, int p_
 	GLenum type;
 
 	bool compressed = false;
+	bool srgb = false;
 
 	if (p_flags & VS::TEXTURE_FLAG_USED_FOR_STREAMING) {
 		p_flags &= ~VS::TEXTURE_FLAG_MIPMAPS; // no mipies for video
@@ -848,8 +849,16 @@ void RasterizerStorageGLES2::sky_set_texture(RID p_sky, RID p_panorama, int p_ra
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); //need this for proper sampling
 
-	// New cubemap that will hold the mipmaps with different roughness values
 	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, resources.radical_inverse_vdc_cache_tex);
+
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+	// New cubemap that will hold the mipmaps with different roughness values
+	glActiveTexture(GL_TEXTURE2);
 	glGenTextures(1, &sky->radiance);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, sky->radiance);
 
@@ -3200,6 +3209,35 @@ void RasterizerStorageGLES2::initialize() {
 	{
 		resources.skeleton_transform_buffer_size = 0;
 		glGenBuffers(1, &resources.skeleton_transform_buffer);
+	}
+
+	// radical inverse vdc cache texture
+	// used for cubemap filtering
+	if (config.float_texture_supported) {
+		glGenTextures(1, &resources.radical_inverse_vdc_cache_tex);
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, resources.radical_inverse_vdc_cache_tex);
+
+		float radical_inverse[512];
+
+		for (uint32_t i = 0; i < 512; i++) {
+			uint32_t bits = i;
+
+			bits = (bits << 16) | (bits >> 16);
+			bits = ((bits & 0x55555555) << 1) | ((bits & 0xAAAAAAAA) >> 1);
+			bits = ((bits & 0x33333333) << 2) | ((bits & 0xCCCCCCCC) >> 2);
+			bits = ((bits & 0x0F0F0F0F) << 4) | ((bits & 0xF0F0F0F0) >> 4);
+			bits = ((bits & 0x00FF00FF) << 8) | ((bits & 0xFF00FF00) >> 8);
+
+			float value = float(bits) * 2.3283064365386963e-10;
+
+			radical_inverse[i] = value;
+		}
+
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, 512, 1, 0, GL_LUMINANCE, GL_FLOAT, radical_inverse);
+
+		glBindTexture(GL_TEXTURE_2D, 0);
 	}
 }
 

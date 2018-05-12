@@ -94,6 +94,8 @@ public:
 		GLuint normal_tex;
 		GLuint aniso_tex;
 
+		GLuint radical_inverse_vdc_cache_tex;
+
 		GLuint quadie;
 
 		size_t skeleton_transform_buffer_size;
@@ -243,6 +245,8 @@ public:
 		bool ignore_mipmaps;
 
 		bool compressed;
+
+		bool srgb;
 
 		int mipmaps;
 
