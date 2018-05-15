@@ -174,6 +174,8 @@ uniform mat4 radiance_inverse_xform;
 
 #endif
 
+uniform float bg_energy;
+
 //
 // varyings
 //
@@ -194,6 +196,12 @@ varying vec2 uv2_interp;
 #endif
 
 varying vec3 view_interp;
+
+vec3 metallic_to_specular_color(float metallic, float specular, vec3 albedo) {
+	float dielectric = (0.034 * 2.0) * specular;
+	// energy conservation
+	return mix(vec3(dielectric), albedo, metallic); // TODO: reference?
+}
 
 FRAGMENT_SHADER_GLOBALS
 
@@ -232,25 +240,65 @@ FRAGMENT_SHADER_CODE
 
 }
 
+	vec3 N = normal;
+	
 #ifdef ALPHA_SCISSOR_USED
 	if (alpha < alpha_scissor) {
 		discard;
 	}
 #endif
+	
+//
+// Lighting
+//
+	
+	vec3 specular_light = vec3(0.0, 0.0, 0.0);
+	vec3 diffuse_light = vec3(0.0, 0.0, 0.0);
+	
+	vec3 ambient_light = vec3(0.0, 0.0, 0.0);
+	
+	vec3 env_reflection_light = vec3(0.0, 0.0, 0.0);
+	
+	vec3 eye_position = -normalize(vertex_interp);
 
 #ifdef USE_RADIANCE_MAP
 
-	vec3 eye_position = -normalize(vertex_interp);
-	vec3 N = normal_interp;
 
 	vec3 ref_vec = reflect(-eye_position, N);
 	ref_vec = normalize((radiance_inverse_xform * vec4(ref_vec, 0.0)).xyz);
 
 	ref_vec.xz *= -1.0;
 
-	albedo += textureCubeLod(radiance_map, ref_vec, roughness * 5.0).xyz;
-#endif
+	env_reflection_light = textureCubeLod(radiance_map, ref_vec, roughness * RADIANCE_MAX_LOD).xyz * bg_energy;
+	ambient_light = textureCubeLod(radiance_map, ref_vec, RADIANCE_MAX_LOD).xyz * bg_energy;
+	
+	specular_light += env_reflection_light;
+	
+	ambient_light *= albedo;
+	
+	diffuse_light *= 1.0 - metallic;
+	ambient_light *= 1.0 - metallic;
+	
+	// environment BRDF approximation
+	
+	// TODO shadeless
+	{
+		const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
+		const vec4 c1 = vec4( 1.0, 0.0425, 1.04, -0.04);
+		vec4 r = roughness * c0 + c1;
+		float ndotv = clamp(dot(normal,eye_position),0.0,1.0);
+		float a004 = min( r.x * r.x, exp2( -9.28 * ndotv ) ) * r.x + r.y;
+		vec2 AB = vec2( -1.04, 1.04 ) * a004 + r.zw;
 
+		vec3 specular_color = metallic_to_specular_color(metallic, specular, albedo);
+		specular_light *= AB.x * specular_color + AB.y;
+	}
+	
+	gl_FragColor = vec4(ambient_light + diffuse_light + specular_light, alpha);
+#else
 	gl_FragColor = vec4(albedo, alpha);
+#endif
+	
+
 
 }

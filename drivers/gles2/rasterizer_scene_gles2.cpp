@@ -655,7 +655,7 @@ void RasterizerSceneGLES2::_render_geometry(RenderList::Element *p_element) {
 	}
 }
 
-void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList::Element **p_elements, int p_element_count, const Transform &p_view_transform, const CameraMatrix &p_projection, GLuint p_base_env, bool p_reverse_cull, bool p_alpha_pass, bool p_shadow, bool p_directional_add, bool p_directional_shadows) {
+void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList::Element **p_elements, int p_element_count, const Transform &p_view_transform, const CameraMatrix &p_projection, Environment *p_env, GLuint p_base_env, bool p_reverse_cull, bool p_alpha_pass, bool p_shadow, bool p_directional_add, bool p_directional_shadows) {
 
 	Vector2 screen_pixel_size;
 	screen_pixel_size.x = 1.0 / storage->frame.current_rt->width;
@@ -690,6 +690,12 @@ void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList:
 
 		if (use_radiance_map) {
 			state.scene_shader.set_uniform(SceneShaderGLES2::RADIANCE_INVERSE_XFORM, p_view_transform);
+		}
+
+		if (p_env) {
+			state.scene_shader.set_uniform(SceneShaderGLES2::BG_ENERGY, p_env->bg_energy);
+		} else {
+			state.scene_shader.set_uniform(SceneShaderGLES2::BG_ENERGY, 1.0);
 		}
 
 		if (p_alpha_pass || p_directional_add) {
@@ -901,7 +907,7 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 
 	// render opaque things first
 	render_list.sort_by_key(false);
-	_render_render_list(render_list.elements, render_list.element_count, p_cam_transform, p_cam_projection, env_radiance_tex, false, false, false, false, false);
+	_render_render_list(render_list.elements, render_list.element_count, p_cam_transform, p_cam_projection, env, env_radiance_tex, false, false, false, false, false);
 
 	// alpha pass
 
@@ -909,7 +915,7 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
 	render_list.sort_by_key(true);
-	_render_render_list(&render_list.elements[render_list.max_elements - render_list.alpha_element_count], render_list.alpha_element_count, p_cam_transform, p_cam_projection, env_radiance_tex, false, true, false, false, false);
+	_render_render_list(&render_list.elements[render_list.max_elements - render_list.alpha_element_count], render_list.alpha_element_count, p_cam_transform, p_cam_projection, env, env_radiance_tex, false, true, false, false, false);
 
 	glDepthMask(GL_FALSE);
 	glDisable(GL_DEPTH_TEST);
