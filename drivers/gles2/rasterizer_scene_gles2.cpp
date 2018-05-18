@@ -236,16 +236,39 @@ int RasterizerSceneGLES2::environment_get_canvas_max_layer(RID p_env) {
 }
 
 RID RasterizerSceneGLES2::light_instance_create(RID p_light) {
-	return RID();
+
+	LightInstance *light_instance = memnew(LightInstance);
+
+	light_instance->light = p_light;
+	light_instance->light_ptr = storage->light_owner.getornull(p_light);
+
+	ERR_FAIL_COND_V(!light_instance->light_ptr, RID());
+
+	light_instance->self = light_instance_owner.make_rid(light_instance);
+
+	return light_instance->self;
 }
 
 void RasterizerSceneGLES2::light_instance_set_transform(RID p_light_instance, const Transform &p_transform) {
+
+	LightInstance *light_instance = light_instance_owner.getornull(p_light_instance);
+	ERR_FAIL_COND(!light_instance);
+
+	light_instance->transform = p_transform;
 }
 
 void RasterizerSceneGLES2::light_instance_set_shadow_transform(RID p_light_instance, const CameraMatrix &p_projection, const Transform &p_transform, float p_far, float p_split, int p_pass, float p_bias_scale) {
+
+	LightInstance *light_instance = light_instance_owner.getornull(p_light_instance);
+	ERR_FAIL_COND(!light_instance);
+
+	// TODO;
 }
 
 void RasterizerSceneGLES2::light_instance_mark_visible(RID p_light_instance) {
+
+	LightInstance *light_instance = light_instance_owner.getornull(p_light_instance);
+	ERR_FAIL_COND(!light_instance);
 }
 
 //////////////////////

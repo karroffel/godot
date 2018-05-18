@@ -803,6 +803,34 @@ public:
 
 	/* Light API */
 
+	struct Light : Instanciable {
+		VS::LightType type;
+		float param[VS::LIGHT_PARAM_MAX];
+
+		Color color;
+		Color shadow_color;
+
+		RID projector;
+
+		bool shadow;
+		bool negative;
+		bool reverse_cull;
+
+		uint32_t cull_mask;
+
+		VS::LightOmniShadowMode omni_shadow_mode;
+		VS::LightOmniShadowDetail omni_shadow_detail;
+
+		VS::LightDirectionalShadowMode directional_shadow_mode;
+		VS::LightDirectionalShadowDepthRangeMode directional_range_mode;
+
+		bool directional_blend_splits;
+
+		uint64_t version;
+	};
+
+	mutable RID_Owner<Light> light_owner;
+
 	virtual RID light_create(VS::LightType p_type);
 
 	virtual void light_set_color(RID p_light, const Color &p_color);

@@ -265,6 +265,26 @@ public:
 	virtual int environment_get_canvas_max_layer(RID p_env);
 
 	/* LIGHT INSTANCE */
+
+	struct LightInstance : public RID_Data {
+
+		// TODO Shadows
+
+		RID self;
+		RID light;
+
+		RasterizerStorageGLES2::Light *light_ptr;
+		Transform transform;
+
+		Vector3 light_vector;
+		Vector3 spot_vector;
+		float linear_att;
+
+		// TODO passes and all that stuff ?
+	};
+
+	mutable RID_Owner<LightInstance> light_instance_owner;
+
 	virtual RID light_instance_create(RID p_light);
 	virtual void light_instance_set_transform(RID p_light_instance, const Transform &p_transform);
 	virtual void light_instance_set_shadow_transform(RID p_light_instance, const CameraMatrix &p_projection, const Transform &p_transform, float p_far, float p_split, int p_pass, float p_bias_scale = 1.0);

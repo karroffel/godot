@@ -2406,87 +2406,248 @@ void RasterizerStorageGLES2::update_dirty_skeletons() {
 /* Light API */
 
 RID RasterizerStorageGLES2::light_create(VS::LightType p_type) {
-	return RID();
+
+	Light *light = memnew(Light);
+
+	light->type = p_type;
+
+	light->param[VS::LIGHT_PARAM_ENERGY] = 1.0;
+	light->param[VS::LIGHT_PARAM_INDIRECT_ENERGY] = 1.0;
+	light->param[VS::LIGHT_PARAM_SPECULAR] = 0.5;
+	light->param[VS::LIGHT_PARAM_RANGE] = 1.0;
+	light->param[VS::LIGHT_PARAM_SPOT_ANGLE] = 45;
+	light->param[VS::LIGHT_PARAM_CONTACT_SHADOW_SIZE] = 45;
+	light->param[VS::LIGHT_PARAM_SHADOW_MAX_DISTANCE] = 0;
+	light->param[VS::LIGHT_PARAM_SHADOW_SPLIT_1_OFFSET] = 0.1;
+	light->param[VS::LIGHT_PARAM_SHADOW_SPLIT_2_OFFSET] = 0.3;
+	light->param[VS::LIGHT_PARAM_SHADOW_SPLIT_3_OFFSET] = 0.6;
+	light->param[VS::LIGHT_PARAM_SHADOW_NORMAL_BIAS] = 0.1;
+	light->param[VS::LIGHT_PARAM_SHADOW_BIAS_SPLIT_SCALE] = 0.1;
+
+	light->color = Color(1, 1, 1, 1);
+	light->shadow = false;
+	light->negative = false;
+	light->cull_mask = 0xFFFFFFFF;
+	light->directional_shadow_mode = VS::LIGHT_DIRECTIONAL_SHADOW_ORTHOGONAL;
+	light->omni_shadow_mode = VS::LIGHT_OMNI_SHADOW_DUAL_PARABOLOID;
+	light->omni_shadow_detail = VS::LIGHT_OMNI_SHADOW_DETAIL_VERTICAL;
+	light->directional_blend_splits = false;
+	light->directional_range_mode = VS::LIGHT_DIRECTIONAL_SHADOW_DEPTH_RANGE_STABLE;
+	light->reverse_cull = false;
+	light->version = 0;
+
+	return light_owner.make_rid(light);
 }
 
 void RasterizerStorageGLES2::light_set_color(RID p_light, const Color &p_color) {
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND(!light);
+
+	light->color = p_color;
 }
 
 void RasterizerStorageGLES2::light_set_param(RID p_light, VS::LightParam p_param, float p_value) {
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND(!light);
+	ERR_FAIL_INDEX(p_param, VS::LIGHT_PARAM_MAX);
+
+	switch (p_param) {
+		case VS::LIGHT_PARAM_RANGE:
+		case VS::LIGHT_PARAM_SPOT_ANGLE:
+		case VS::LIGHT_PARAM_SHADOW_MAX_DISTANCE:
+		case VS::LIGHT_PARAM_SHADOW_SPLIT_1_OFFSET:
+		case VS::LIGHT_PARAM_SHADOW_SPLIT_2_OFFSET:
+		case VS::LIGHT_PARAM_SHADOW_SPLIT_3_OFFSET:
+		case VS::LIGHT_PARAM_SHADOW_NORMAL_BIAS:
+		case VS::LIGHT_PARAM_SHADOW_BIAS: {
+			light->version++;
+			light->instance_change_notify();
+		} break;
+	}
+
+	light->param[p_param] = p_value;
 }
 
 void RasterizerStorageGLES2::light_set_shadow(RID p_light, bool p_enabled) {
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND(!light);
+
+	light->shadow = p_enabled;
+
+	light->version++;
+	light->instance_change_notify();
 }
 
 void RasterizerStorageGLES2::light_set_shadow_color(RID p_light, const Color &p_color) {
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND(!light);
+
+	light->shadow_color = p_color;
 }
 
 void RasterizerStorageGLES2::light_set_projector(RID p_light, RID p_texture) {
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND(!light);
+
+	light->projector = p_texture;
 }
 
 void RasterizerStorageGLES2::light_set_negative(RID p_light, bool p_enable) {
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND(!light);
+
+	light->negative = p_enable;
 }
 
 void RasterizerStorageGLES2::light_set_cull_mask(RID p_light, uint32_t p_mask) {
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND(!light);
+
+	light->cull_mask = p_mask;
+
+	light->version++;
+	light->instance_change_notify();
 }
 
 void RasterizerStorageGLES2::light_set_reverse_cull_face_mode(RID p_light, bool p_enabled) {
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND(!light);
+
+	light->reverse_cull = p_enabled;
 }
 
 void RasterizerStorageGLES2::light_omni_set_shadow_mode(RID p_light, VS::LightOmniShadowMode p_mode) {
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND(!light);
+
+	light->omni_shadow_mode = p_mode;
+
+	light->version++;
+	light->instance_change_notify();
 }
 
 VS::LightOmniShadowMode RasterizerStorageGLES2::light_omni_get_shadow_mode(RID p_light) {
-	return VS::LightOmniShadowMode::LIGHT_OMNI_SHADOW_DUAL_PARABOLOID;
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND_V(!light, VS::LIGHT_OMNI_SHADOW_CUBE);
+
+	return light->omni_shadow_mode;
 }
 
 void RasterizerStorageGLES2::light_omni_set_shadow_detail(RID p_light, VS::LightOmniShadowDetail p_detail) {
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND(!light);
+
+	light->omni_shadow_detail = p_detail;
+
+	light->version++;
+	light->instance_change_notify();
 }
 
 void RasterizerStorageGLES2::light_directional_set_shadow_mode(RID p_light, VS::LightDirectionalShadowMode p_mode) {
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND(!light);
+
+	light->directional_shadow_mode = p_mode;
+
+	light->version++;
+	light->instance_change_notify();
 }
 
 void RasterizerStorageGLES2::light_directional_set_blend_splits(RID p_light, bool p_enable) {
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND(!light);
+
+	light->directional_blend_splits = p_enable;
+
+	light->version++;
+	light->instance_change_notify();
 }
 
 bool RasterizerStorageGLES2::light_directional_get_blend_splits(RID p_light) const {
-	return false;
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND_V(!light, false);
+	return light->directional_blend_splits;
 }
 
 VS::LightDirectionalShadowMode RasterizerStorageGLES2::light_directional_get_shadow_mode(RID p_light) {
-	return VS::LightDirectionalShadowMode::LIGHT_DIRECTIONAL_SHADOW_ORTHOGONAL;
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND_V(!light, VS::LIGHT_DIRECTIONAL_SHADOW_ORTHOGONAL);
+	return light->directional_shadow_mode;
 }
 
 void RasterizerStorageGLES2::light_directional_set_shadow_depth_range_mode(RID p_light, VS::LightDirectionalShadowDepthRangeMode p_range_mode) {
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND(!light);
+
+	light->directional_range_mode = p_range_mode;
 }
 
 VS::LightDirectionalShadowDepthRangeMode RasterizerStorageGLES2::light_directional_get_shadow_depth_range_mode(RID p_light) const {
-	return VS::LightDirectionalShadowDepthRangeMode::LIGHT_DIRECTIONAL_SHADOW_DEPTH_RANGE_STABLE;
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND_V(!light, VS::LIGHT_DIRECTIONAL_SHADOW_DEPTH_RANGE_STABLE);
+
+	return light->directional_range_mode;
 }
 
 VS::LightType RasterizerStorageGLES2::light_get_type(RID p_light) const {
-	return VS::LIGHT_DIRECTIONAL;
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND_V(!light, VS::LIGHT_DIRECTIONAL);
+
+	return light->type;
 }
 
 float RasterizerStorageGLES2::light_get_param(RID p_light, VS::LightParam p_param) {
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND_V(!light, 0.0);
+	ERR_FAIL_INDEX_V(p_param, VS::LIGHT_PARAM_MAX, 0.0);
 
-	return VS::LIGHT_DIRECTIONAL;
+	return light->param[p_param];
 }
 
 Color RasterizerStorageGLES2::light_get_color(RID p_light) {
-	return Color();
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND_V(!light, Color());
+
+	return light->color;
 }
 
 bool RasterizerStorageGLES2::light_has_shadow(RID p_light) const {
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND_V(!light, false);
 
-	return VS::LIGHT_DIRECTIONAL;
+	return light->shadow;
 }
 
 uint64_t RasterizerStorageGLES2::light_get_version(RID p_light) const {
-	return 0;
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND_V(!light, 0);
+
+	return light->version;
 }
 
 AABB RasterizerStorageGLES2::light_get_aabb(RID p_light) const {
+	Light *light = light_owner.getornull(p_light);
+	ERR_FAIL_COND_V(!light, AABB());
+
+	switch (light->type) {
+
+		case VS::LIGHT_SPOT: {
+			float len = light->param[VS::LIGHT_PARAM_RANGE];
+			float size = Math::tan(Math::deg2rad(light->param[VS::LIGHT_PARAM_SPOT_ANGLE])) * len;
+			return AABB(Vector3(-size, -size, -len), Vector3(size * 2, size * 2, len));
+		} break;
+
+		case VS::LIGHT_OMNI: {
+			float r = light->param[VS::LIGHT_PARAM_RANGE];
+			return AABB(-Vector3(r, r, r), Vector3(r, r, r) * 2);
+		} break;
+
+		case VS::LIGHT_DIRECTIONAL: {
+			return AABB();
+		} break;
+	}
+
+	ERR_FAIL_V(AABB());
 	return AABB();
 }
 
@@ -3047,6 +3208,13 @@ VS::InstanceType RasterizerStorageGLES2::get_base_type(RID p_rid) const {
 	if (mesh_owner.owns(p_rid)) {
 		return VS::INSTANCE_MESH;
 	}
+	if (light_owner.owns(p_rid)) {
+		return VS::INSTANCE_LIGHT;
+	}
+	if (mesh_owner.owns(p_rid)) {
+		VS::INSTANCE_MESH;
+	}
+
 	return VS::INSTANCE_NONE;
 }
 
