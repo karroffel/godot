@@ -707,6 +707,10 @@ void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList:
 			state.scene_shader.set_conditional(SceneShaderGLES2::USE_RADIANCE_MAP, use_radiance_map);
 		}
 
+		// opaque pass
+
+		state.scene_shader.set_conditional(SceneShaderGLES2::LIGHT_PASS, false);
+
 		_setup_geometry(e, skeleton);
 
 		_setup_material(material, use_radiance_map);
@@ -720,6 +724,8 @@ void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList:
 		} else {
 			state.scene_shader.set_uniform(SceneShaderGLES2::BG_ENERGY, 1.0);
 		}
+
+		glEnable(GL_BLEND);
 
 		if (p_alpha_pass || p_directional_add) {
 			int desired_blend_mode;
@@ -775,6 +781,44 @@ void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList:
 		state.scene_shader.set_uniform(SceneShaderGLES2::SCREEN_PIXEL_SIZE, screen_pixel_size);
 
 		_render_geometry(e);
+
+		// render lights
+
+		state.scene_shader.set_conditional(SceneShaderGLES2::LIGHT_PASS, true);
+
+		state.scene_shader.bind();
+
+		glBlendEquation(GL_FUNC_ADD);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+
+		{
+			state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_MATRIX, p_view_transform.inverse());
+			state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_INVERSE_MATRIX, p_view_transform);
+			state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_MATRIX, p_projection);
+			state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_INVERSE_MATRIX, p_projection.inverse());
+
+			state.scene_shader.set_uniform(SceneShaderGLES2::MODEL_MATRIX, e->instance->transform);
+
+			state.scene_shader.set_uniform(SceneShaderGLES2::TIME, storage->frame.time[0]);
+
+			state.scene_shader.set_uniform(SceneShaderGLES2::SCREEN_PIXEL_SIZE, screen_pixel_size);
+		}
+
+		for (int j = 0; j < e->instance->light_instances.size(); j++) {
+
+			RID light_rid = e->instance->light_instances[j];
+			LightInstance *light = light_instance_owner.get(light_rid);
+
+			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_POSITION, light->transform.origin);
+
+			float range = light->light_ptr->param[VS::LIGHT_PARAM_RANGE];
+
+			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_RANGE, range);
+
+			_render_geometry(e);
+		}
+
+		state.scene_shader.set_conditional(SceneShaderGLES2::LIGHT_PASS, false);
 	}
 
 	state.scene_shader.set_conditional(SceneShaderGLES2::USE_RADIANCE_MAP, false);

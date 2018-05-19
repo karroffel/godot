@@ -176,6 +176,12 @@ uniform mat4 radiance_inverse_xform;
 
 uniform float bg_energy;
 
+#ifdef LIGHT_PASS
+uniform vec3 light_position;
+
+uniform float light_range;
+#endif
+
 //
 // varyings
 //
@@ -206,6 +212,34 @@ vec3 metallic_to_specular_color(float metallic, float specular, vec3 albedo) {
 FRAGMENT_SHADER_GLOBALS
 
 void main() {
+
+#ifdef LIGHT_PASS
+	vec4 color = vec4(0.0);
+
+	vec3 light_income_vector = (camera_matrix * vec4(light_position, 1.0)).xyz - vertex_interp;
+
+	float intensity = length(light_income_vector);
+
+	intensity = intensity / light_range;
+
+	intensity = clamp(intensity, 0.0, 1.0);
+
+	intensity = 1.0 - intensity;
+
+	// normalize the light vector
+
+	light_income_vector = normalize(light_income_vector);
+
+	// is pixel directly lit?
+
+	float NdotL = dot(normal_interp, light_income_vector);
+
+	NdotL = clamp(NdotL, 0.0, 1.0);
+
+	color = vec4(intensity) * NdotL;
+
+	gl_FragColor = color;
+#else
 
 	highp vec3 vertex = vertex_interp;
 	vec3 albedo = vec3(0.8, 0.8, 0.8);
@@ -298,7 +332,9 @@ FRAGMENT_SHADER_CODE
 #else
 	gl_FragColor = vec4(albedo, alpha);
 #endif
-	
+
+
+#endif // lighting
 
 
 }
