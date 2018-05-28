@@ -147,6 +147,8 @@ precision mediump int;
 
 #include "stdlib.glsl"
 
+#define M_PI 3.14159265359
+
 //
 // uniforms
 //
@@ -177,9 +179,19 @@ uniform mat4 radiance_inverse_xform;
 uniform float bg_energy;
 
 #ifdef LIGHT_PASS
+
+#define LIGHT_TYPE_DIRECTIONAL 0
+#define LIGHT_TYPE_OMNI 1
+#define LIGHT_TYPE_SPOT 2
+
+uniform int light_type;
+
 uniform vec3 light_position;
+uniform vec3 light_income_vector;
 
 uniform float light_range;
+uniform float light_energy;
+uniform vec4 light_color;
 #endif
 
 //
@@ -211,35 +223,133 @@ vec3 metallic_to_specular_color(float metallic, float specular, vec3 albedo) {
 
 FRAGMENT_SHADER_GLOBALS
 
-void main() {
 
 #ifdef LIGHT_PASS
-	vec4 color = vec4(0.0);
+float G_GGX_2cos(float cos_theta_m, float alpha) {
+	// Schlick's approximation
+	// C. Schlick, "An Inexpensive BRDF Model for Physically-based Rendering", Computer Graphics Forum. 13 (3): 233 (1994)
+	// Eq. (19), although see Heitz (2014) the about the problems with his derivation.
+	// It nevertheless approximates GGX well with k = alpha/2.
+	float k = 0.5*alpha;
+	return 0.5 / (cos_theta_m * (1.0 - k) + k);
 
-	vec3 light_income_vector = (camera_matrix * vec4(light_position, 1.0)).xyz - vertex_interp;
+	// float cos2 = cos_theta_m*cos_theta_m;
+	// float sin2 = (1.0-cos2);
+	// return 1.0 /( cos_theta_m + sqrt(cos2 + alpha*alpha*sin2) );
+}
 
-	float intensity = length(light_income_vector);
+float D_GGX(float cos_theta_m, float alpha) {
+	float alpha2 = alpha*alpha;
+	float d = 1.0 + (alpha2-1.0)*cos_theta_m*cos_theta_m;
+	return alpha2/(M_PI * d * d);
+}
 
-	intensity = intensity / light_range;
+float SchlickFresnel(float u) {
+    float m = 1.0-u;
+    float m2 = m*m;
+    return m2*m2*m; // pow(m,5)
+}
 
-	intensity = clamp(intensity, 0.0, 1.0);
 
-	intensity = 1.0 - intensity;
+void light_compute(vec3 N,
+                   vec3 L,
+                   vec3 V,
+                   vec3 B,
+                   vec3 T,
+                   vec3 light_color,
+                   vec3 attenuation,
+                   vec3 diffuse_color,
+                   vec3 transmission,
+                   float specular_blob_intensity,
+                   float roughness,
+                   float metallic,
+                   float rim,
+                   float rim_tint,
+                   float clearcoat,
+                   float clearcoat_gloss,
+                   float anisotropy,
+                   inout vec3 diffuse_light,
+                   inout vec3 specular_light) {
 
-	// normalize the light vector
+	float NdotL = dot(N, L);
+	float cNdotL = max(NdotL, 0.0);
+	float NdotV = dot(N, V);
+	float cNdotV = max(NdotV, 0.0);
 
-	light_income_vector = normalize(light_income_vector);
+	{
+		// calculate diffuse reflection
 
-	// is pixel directly lit?
+		// TODO hardcode Oren Nayar for now
+		float diffuse_brdf_NL;
 
-	float NdotL = dot(normal_interp, light_income_vector);
+		diffuse_brdf_NL = max(0.0,(NdotL + roughness) / ((1.0 + roughness) * (1.0 + roughness)));
 
-	NdotL = clamp(NdotL, 0.0, 1.0);
+		// diffuse_light += light_color * diffuse_color * diffuse_brdf_NL * attenuation;
+		diffuse_light += attenuation * cNdotL;
+	}
 
-	color = vec4(intensity) * NdotL;
+	{
+		// calculate specular reflection
 
-	gl_FragColor = color;
-#else
+		 vec3 R = normalize(-reflect(L,N));
+		 float cRdotV = max(dot(R, V), 0.0);
+		 float blob_intensity = pow(cRdotV, (1.0 - roughness) * 256.0);
+		 specular_light += light_color * attenuation * blob_intensity;
+
+
+	}
+}
+
+void light_process_omni(vec3 vertex,
+                        vec3 eye_vec,
+                        vec3 normal,
+                        vec3 binormal,
+                        vec3 tangent,
+                        vec3 albedo,
+                        vec3 transmission,
+                        float roughness,
+                        float metallic,
+                        float rim,
+                        float rim_tint,
+                        float clearcoat,
+                        float clearcoat_gloss,
+                        float anisotropy,
+                        float blob_intensity,
+                        inout vec3 diffuse_light,
+                        inout vec3 specular_light) {
+	vec3 light_vec = light_income_vector - vertex;
+	float light_length = length(light_vec);
+
+	float normalized_distance = light_length / light_range;
+
+	float omni_attenuation = 1.0 - normalized_distance;
+
+	vec3 light_attenuation = vec3(omni_attenuation);
+
+	light_compute(normal,
+	              normalize(light_vec),
+	              eye_vec,
+	              binormal,
+	              tangent,
+	              light_color.xyz * light_energy,
+	              light_attenuation,
+	              albedo,
+	              transmission,
+	              blob_intensity,
+	              roughness,
+	              metallic,
+	              rim,
+	              rim_tint,
+	              clearcoat,
+	              clearcoat_gloss,
+	              anisotropy,
+	              diffuse_light,
+	              specular_light);
+}
+#endif
+
+void main() {
+
 
 	highp vec3 vertex = vertex_interp;
 	vec3 albedo = vec3(0.8, 0.8, 0.8);
@@ -256,6 +366,8 @@ void main() {
 	vec2 anisotropy_flow = vec2(1.0,0.0);
 
 	vec3 normal = normalize(normal_interp);
+	vec3 binormal = vec3(0.0);
+	vec3 tangent = vec3(0.0);
 
 	float alpha = 1.0;
 
@@ -276,6 +388,15 @@ FRAGMENT_SHADER_CODE
 
 	vec3 N = normal;
 	
+	vec3 specular_light = vec3(0.0, 0.0, 0.0);
+	vec3 diffuse_light = vec3(0.0, 0.0, 0.0);
+
+	vec3 ambient_light = vec3(0.0, 0.0, 0.0);
+
+	vec3 env_reflection_light = vec3(0.0, 0.0, 0.0);
+
+	vec3 eye_position = -normalize(vertex_interp);
+
 #ifdef ALPHA_SCISSOR_USED
 	if (alpha < alpha_scissor) {
 		discard;
@@ -285,15 +406,53 @@ FRAGMENT_SHADER_CODE
 //
 // Lighting
 //
-	
-	vec3 specular_light = vec3(0.0, 0.0, 0.0);
-	vec3 diffuse_light = vec3(0.0, 0.0, 0.0);
-	
-	vec3 ambient_light = vec3(0.0, 0.0, 0.0);
-	
-	vec3 env_reflection_light = vec3(0.0, 0.0, 0.0);
-	
-	vec3 eye_position = -normalize(vertex_interp);
+#ifdef LIGHT_PASS
+
+	if (light_type == LIGHT_TYPE_OMNI) {
+		light_process_omni(vertex_interp,
+		                   eye_position,
+		                   normal,
+		                   binormal,
+		                   tangent,
+		                   albedo,
+		                   transmission,
+		                   roughness,
+		                   metallic,
+		                   rim,
+		                   rim_tint,
+		                   clearcoat,
+		                   clearcoat_gloss,
+		                   anisotropy,
+		                   specular,
+		                   diffuse_light,
+		                   specular_light);
+	}
+
+//	vec3 light_income_vector = (camera_matrix * vec4(light_position, 1.0)).xyz - vertex_interp;
+
+//	float intensity = length(light_income_vector);
+
+//	intensity = intensity / light_range;
+
+//	intensity = clamp(intensity, 0.0, 1.0);
+
+//	intensity = 1.0 - intensity;
+
+	// normalize the light vector
+
+//	light_income_vector = normalize(light_income_vector);
+
+	// is pixel directly lit?
+
+//	float NdotL = dot(normal_interp, light_income_vector);
+
+//	NdotL = clamp(NdotL, 0.0, 1.0);
+
+//	color = vec4(intensity) * NdotL;
+
+	gl_FragColor = vec4(ambient_light + diffuse_light + specular_light, alpha);
+#else
+
 
 #ifdef USE_RADIANCE_MAP
 

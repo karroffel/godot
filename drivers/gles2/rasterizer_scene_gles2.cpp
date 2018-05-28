@@ -767,6 +767,15 @@ void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList:
 
 				} break;
 			}
+		} else {
+
+			// no blend mode given - assume mix
+			glBlendEquation(GL_FUNC_ADD);
+			if (storage->frame.current_rt && storage->frame.current_rt->flags[RasterizerStorage::RENDER_TARGET_TRANSPARENT]) {
+				glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+			} else {
+				glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+			}
 		}
 
 		state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_MATRIX, p_view_transform.inverse());
@@ -810,10 +819,15 @@ void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList:
 			LightInstance *light = light_instance_owner.get(light_rid);
 
 			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_POSITION, light->transform.origin);
+			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_TYPE, light->light_ptr->type);
+			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_INCOME_VECTOR, p_view_transform.inverse().xform(light->transform.origin));
 
 			float range = light->light_ptr->param[VS::LIGHT_PARAM_RANGE];
+			float energy = light->light_ptr->param[VS::LIGHT_PARAM_ENERGY];
 
 			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_RANGE, range);
+			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_ENERGY, energy);
+			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_COLOR, light->light_ptr->color);
 
 			_render_geometry(e);
 		}
