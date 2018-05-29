@@ -168,7 +168,7 @@ uniform vec2 screen_pixel_size;
 
 #ifdef USE_RADIANCE_MAP
 
-#define RADIANCE_MAX_LOD 5.0
+#define RADIANCE_MAX_LOD 6.0
 
 uniform samplerCube radiance_map; // texunit:0
 
@@ -184,14 +184,20 @@ uniform float bg_energy;
 #define LIGHT_TYPE_OMNI 1
 #define LIGHT_TYPE_SPOT 2
 
+// general for all lights
 uniform int light_type;
 
-uniform vec3 light_position;
-uniform vec3 light_income_vector;
-
-uniform float light_range;
 uniform float light_energy;
 uniform vec4 light_color;
+uniform float light_specular;
+
+// omni
+uniform vec3 light_position;
+uniform vec3 light_position_camera_space;
+
+uniform float light_range;
+uniform vec4 light_attenuation;
+
 #endif
 
 //
@@ -225,32 +231,6 @@ FRAGMENT_SHADER_GLOBALS
 
 
 #ifdef LIGHT_PASS
-float G_GGX_2cos(float cos_theta_m, float alpha) {
-	// Schlick's approximation
-	// C. Schlick, "An Inexpensive BRDF Model for Physically-based Rendering", Computer Graphics Forum. 13 (3): 233 (1994)
-	// Eq. (19), although see Heitz (2014) the about the problems with his derivation.
-	// It nevertheless approximates GGX well with k = alpha/2.
-	float k = 0.5*alpha;
-	return 0.5 / (cos_theta_m * (1.0 - k) + k);
-
-	// float cos2 = cos_theta_m*cos_theta_m;
-	// float sin2 = (1.0-cos2);
-	// return 1.0 /( cos_theta_m + sqrt(cos2 + alpha*alpha*sin2) );
-}
-
-float D_GGX(float cos_theta_m, float alpha) {
-	float alpha2 = alpha*alpha;
-	float d = 1.0 + (alpha2-1.0)*cos_theta_m*cos_theta_m;
-	return alpha2/(M_PI * d * d);
-}
-
-float SchlickFresnel(float u) {
-    float m = 1.0-u;
-    float m2 = m*m;
-    return m2*m2*m; // pow(m,5)
-}
-
-
 void light_compute(vec3 N,
                    vec3 L,
                    vec3 V,
@@ -284,8 +264,7 @@ void light_compute(vec3 N,
 
 		diffuse_brdf_NL = max(0.0,(NdotL + roughness) / ((1.0 + roughness) * (1.0 + roughness)));
 
-		// diffuse_light += light_color * diffuse_color * diffuse_brdf_NL * attenuation;
-		diffuse_light += attenuation * cNdotL;
+		diffuse_light += light_color * diffuse_color * diffuse_brdf_NL * attenuation * roughness;
 	}
 
 	{
@@ -294,7 +273,7 @@ void light_compute(vec3 N,
 		 vec3 R = normalize(-reflect(L,N));
 		 float cRdotV = max(dot(R, V), 0.0);
 		 float blob_intensity = pow(cRdotV, (1.0 - roughness) * 256.0);
-		 specular_light += light_color * attenuation * blob_intensity;
+		 specular_light += light_color * attenuation * blob_intensity * specular_blob_intensity;
 
 
 	}
@@ -314,37 +293,13 @@ void light_process_omni(vec3 vertex,
                         float clearcoat,
                         float clearcoat_gloss,
                         float anisotropy,
-                        float blob_intensity,
+                        float specular,
                         inout vec3 diffuse_light,
                         inout vec3 specular_light) {
-	vec3 light_vec = light_income_vector - vertex;
-	float light_length = length(light_vec);
+}
 
-	float normalized_distance = light_length / light_range;
+void light_process_directional() {
 
-	float omni_attenuation = 1.0 - normalized_distance;
-
-	vec3 light_attenuation = vec3(omni_attenuation);
-
-	light_compute(normal,
-	              normalize(light_vec),
-	              eye_vec,
-	              binormal,
-	              tangent,
-	              light_color.xyz * light_energy,
-	              light_attenuation,
-	              albedo,
-	              transmission,
-	              blob_intensity,
-	              roughness,
-	              metallic,
-	              rim,
-	              rim_tint,
-	              clearcoat,
-	              clearcoat_gloss,
-	              anisotropy,
-	              diffuse_light,
-	              specular_light);
 }
 #endif
 
@@ -409,23 +364,65 @@ FRAGMENT_SHADER_CODE
 #ifdef LIGHT_PASS
 
 	if (light_type == LIGHT_TYPE_OMNI) {
-		light_process_omni(vertex_interp,
-		                   eye_position,
-		                   normal,
-		                   binormal,
-		                   tangent,
-		                   albedo,
-		                   transmission,
-		                   roughness,
-		                   metallic,
-		                   rim,
-		                   rim_tint,
-		                   clearcoat,
-		                   clearcoat_gloss,
-		                   anisotropy,
-		                   specular,
-		                   diffuse_light,
-		                   specular_light);
+		vec3 light_vec = light_position_camera_space - vertex;
+		float light_length = length(light_vec);
+
+		float normalized_distance = light_length / light_range;
+
+		float omni_attenuation = pow(1.0 - normalized_distance, light_attenuation.w);
+
+		vec3 attenuation = vec3(omni_attenuation);
+
+		light_compute(normal,
+		              normalize(light_vec),
+		              eye_position,
+		              binormal,
+		              tangent,
+		              light_color.xyz * light_energy,
+		              attenuation,
+		              albedo,
+		              transmission,
+		              specular * light_specular,
+		              roughness,
+		              metallic,
+		              rim,
+		              rim_tint,
+		              clearcoat,
+		              clearcoat_gloss,
+		              anisotropy,
+		              diffuse_light,
+		              specular_light);
+
+	} else if (light_type == LIGHT_TYPE_DIRECTIONAL) {
+
+		specular_light = vec3(1.0);
+
+		/*
+		vec3 light_vec = vec3(0.5, -0.5, 0.0);
+		vec3 attenuation = vec3(1.0, 1.0, 1.0);
+
+		light_compute(normal,
+			      normalize(light_vec),
+			      eye_position,
+			      binormal,
+			      tangent,
+			      light_color.xyz * light_energy,
+			      attenuation,
+			      albedo,
+			      transmission,
+			      specular, // * light_specular,
+			      roughness,
+			      metallic,
+			      rim,
+			      rim_tint,
+			      clearcoat,
+			      clearcoat_gloss,
+			      anisotropy,
+			      diffuse_light,
+			      specular_light);
+		*/
+	} else if (light_type == LIGHT_TYPE_SPOT) {
+
 	}
 
 //	vec3 light_income_vector = (camera_matrix * vec4(light_position, 1.0)).xyz - vertex_interp;

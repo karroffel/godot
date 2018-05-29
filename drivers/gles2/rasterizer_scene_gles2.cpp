@@ -801,6 +801,9 @@ void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList:
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 
 		{
+
+			_setup_material(material, false);
+
 			state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_MATRIX, p_view_transform.inverse());
 			state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_INVERSE_MATRIX, p_view_transform);
 			state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_MATRIX, p_projection);
@@ -818,16 +821,44 @@ void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList:
 			RID light_rid = e->instance->light_instances[j];
 			LightInstance *light = light_instance_owner.get(light_rid);
 
-			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_POSITION, light->transform.origin);
-			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_TYPE, light->light_ptr->type);
-			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_INCOME_VECTOR, p_view_transform.inverse().xform(light->transform.origin));
+			switch (light->light_ptr->type) {
+				case VS::LIGHT_DIRECTIONAL: {
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_TYPE, (int)0);
 
-			float range = light->light_ptr->param[VS::LIGHT_PARAM_RANGE];
+				} break;
+
+				case VS::LIGHT_OMNI: {
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_TYPE, (int)1);
+
+					Vector3 position = p_view_transform.inverse().xform(light->transform.origin);
+
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_POSITION_CAMERA_SPACE, position);
+
+					float range = light->light_ptr->param[VS::LIGHT_PARAM_RANGE];
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_RANGE, range);
+
+					Color attenuation = Color(0.0, 0.0, 0.0, 0.0);
+					attenuation.a = light->light_ptr->param[VS::LIGHT_PARAM_ATTENUATION];
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_ATTENUATION, attenuation);
+				} break;
+
+				case VS::LIGHT_SPOT: {
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_TYPE, (int)2);
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_POSITION, light->transform.origin);
+
+				} break;
+
+				default: {
+					print_line("wat.");
+				} break;
+			}
+
 			float energy = light->light_ptr->param[VS::LIGHT_PARAM_ENERGY];
+			float specular = light->light_ptr->param[VS::LIGHT_PARAM_SPECULAR];
 
-			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_RANGE, range);
 			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_ENERGY, energy);
-			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_COLOR, light->light_ptr->color);
+			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_COLOR, light->light_ptr->color.to_linear());
+			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_SPECULAR, specular);
 
 			_render_geometry(e);
 		}
