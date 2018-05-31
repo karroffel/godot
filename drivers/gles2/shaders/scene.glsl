@@ -457,7 +457,7 @@ FRAGMENT_SHADER_CODE
 	vec3 ref_vec = reflect(-eye_position, N);
 	ref_vec = normalize((radiance_inverse_xform * vec4(ref_vec, 0.0)).xyz);
 
-	ref_vec.xz *= -1.0;
+	ref_vec.z *= -1.0;
 
 	env_reflection_light = textureCubeLod(radiance_map, ref_vec, roughness * RADIANCE_MAX_LOD).xyz * bg_energy;
 	ambient_light = textureCubeLod(radiance_map, ref_vec, RADIANCE_MAX_LOD).xyz * bg_energy;
