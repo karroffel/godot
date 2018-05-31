@@ -184,7 +184,15 @@ Ref<Image> RasterizerStorageGLES2::_get_gl_image_and_format(const Ref<Image> &p_
 			need_decompress = true;
 		} break;
 		case Image::FORMAT_RGBE9995: {
-			need_decompress = true;
+			r_gl_internal_format = GL_RGB;
+			r_gl_format = GL_RGB;
+			r_gl_type = GL_UNSIGNED_BYTE;
+
+			if (image.is_valid())
+
+				image = image->rgbe_to_srgb();
+
+			return image;
 
 		} break;
 		case Image::FORMAT_DXT1: {

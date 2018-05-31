@@ -788,7 +788,7 @@ ShaderCompilerGLES2::ShaderCompilerGLES2() {
 	actions[VS::SHADER_SPATIAL].renames["MODELVIEW_MATRIX"] = "model_matrix_copy";
 
 	actions[VS::SHADER_SPATIAL].renames["VERTEX"] = "vertex_interp.xyz";
-	actions[VS::SHADER_SPATIAL].renames["NORMAL"] = "normal_interp";
+	actions[VS::SHADER_SPATIAL].renames["NORMAL"] = "normal";
 	actions[VS::SHADER_SPATIAL].renames["TANGENT"] = "tangent";
 	actions[VS::SHADER_SPATIAL].renames["BINORMAL"] = "binormal";
 	actions[VS::SHADER_SPATIAL].renames["UV"] = "uv_interp";

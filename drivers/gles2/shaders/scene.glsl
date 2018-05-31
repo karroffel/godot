@@ -19,6 +19,10 @@ precision mediump int;
 attribute highp vec3 vertex_attrib; // attrib:0
 attribute vec3 normal_attrib; // attrib:1
 
+#if defined(ENABLE_TANGENT_INTERP) || defined(ENABLE_NORMALMAP)
+attribute vec4 tangent_attrib; // attrib:2
+#endif
+
 #ifdef ENABLE_COLOR_INTERP
 attribute vec4 color_attrib; // attrib:3
 #endif
@@ -51,7 +55,7 @@ uniform mat4 projection_inverse_matrix;
 
 uniform highp float time;
 
-
+uniform float normal_mult;
 
 
 //
@@ -60,6 +64,11 @@ uniform highp float time;
 
 varying highp vec3 vertex_interp;
 varying vec3 normal_interp;
+
+#if defined(ENABLE_TANGENT_INTERP) || defined(ENABLE_NORMALMAP)
+varying vec3 tangent_interp;
+varying vec3 binormal_interp;
+#endif
 
 #ifdef ENABLE_COLOR_INTERP
 varying vec4 color_interp;
@@ -79,7 +88,15 @@ VERTEX_SHADER_GLOBALS
 void main() {
 
 	vertex_interp = vertex_attrib;
-	normal_interp = normal_attrib;
+
+	vec3 normal = normal_attrib * normal_mult;
+
+#if defined(ENABLE_TANGENT_INTERP) || defined(ENABLE_NORMALMAP)
+	vec3 tangent = tangent_attrib.xyz;
+	tangent *= normal_mult;
+	float binormalf = tangent_attrib.a;
+	vec3 binormal = normalize(cross(normal, tangent) * binormalf);
+#endif
 
 #ifdef ENABLE_COLOR_INTERP
 	color_interp = color_attrib;
@@ -126,9 +143,22 @@ VERTEX_SHADER_CODE
 	vec4 camera_vec = camera_matrix * model_vec;
 	vec4 projected_vec = projection_matrix * camera_vec;
 
-	vertex_interp = camera_vec.xyz;
 
-	normal_interp = normalize((modelview * vec4(normal_interp, 0.0)).xyz);
+	// use local coordinates
+	vertex_interp = camera_vec.xyz;
+	normal = normalize((modelview * vec4(normal, 0.0)).xyz);
+
+#if defined(ENABLE_TANGENT_INTERP) || defined(ENABLE_NORMALMAP)
+	tangent = normalize((modelview * vec4(tangent, 0.0)).xyz);
+	binormal = normalize((modelview * vec4(binormal, 0.0)).xyz);
+#endif
+
+	normal_interp = normal;
+
+#if defined(ENABLE_TANGENT_INTERP) || defined(ENABLE_NORMALMAP)
+	tangent_interp = tangent;
+	binormal_interp = binormal;
+#endif
 
 	gl_Position = projected_vec;
 
@@ -178,6 +208,10 @@ uniform mat4 radiance_inverse_xform;
 
 uniform float bg_energy;
 
+uniform float ambient_sky_contribution;
+uniform vec4 ambient_color;
+uniform float ambient_energy;
+
 #ifdef LIGHT_PASS
 
 #define LIGHT_TYPE_DIRECTIONAL 0
@@ -206,6 +240,11 @@ uniform vec4 light_attenuation;
 
 varying highp vec3 vertex_interp;
 varying vec3 normal_interp;
+
+#if defined(ENABLE_TANGENT_INTERP) || defined(ENABLE_NORMALMAP)
+varying vec3 tangent_interp;
+varying vec3 binormal_interp;
+#endif
 
 #ifdef ENABLE_COLOR_INTERP
 varying vec4 color_interp;
@@ -279,25 +318,6 @@ void light_compute(vec3 N,
 	}
 }
 
-void light_process_omni(vec3 vertex,
-                        vec3 eye_vec,
-                        vec3 normal,
-                        vec3 binormal,
-                        vec3 tangent,
-                        vec3 albedo,
-                        vec3 transmission,
-                        float roughness,
-                        float metallic,
-                        float rim,
-                        float rim_tint,
-                        float clearcoat,
-                        float clearcoat_gloss,
-                        float anisotropy,
-                        float specular,
-                        inout vec3 diffuse_light,
-                        inout vec3 specular_light) {
-}
-
 void light_process_directional() {
 
 }
@@ -320,11 +340,23 @@ void main() {
 	float anisotropy = 1.0;
 	vec2 anisotropy_flow = vec2(1.0,0.0);
 
-	vec3 normal = normalize(normal_interp);
+	float alpha = 1.0;
+	float side = 1.0;
+
+#if defined(ENABLE_TANGENT_INTERP) || defined(ENABLE_NORMALMAP)
+	vec3 binormal = normalize(binormal_interp) * side;
+	vec3 tangent = normalize(tangent_interp) * side;
+#else
 	vec3 binormal = vec3(0.0);
 	vec3 tangent = vec3(0.0);
+#endif
+	vec3 normal = normalize(normal_interp);
 
-	float alpha = 1.0;
+#if defined(ENABLE_NORMALMAP)
+	vec3 normalmap = vec3(0.5);
+#endif
+	float normaldepth = 1.0;
+
 
 #ifdef ALPHA_SCISSOR_USED
 	float alpha_scissor = 0.5;
@@ -340,6 +372,13 @@ FRAGMENT_SHADER_CODE
 
 
 }
+
+#if defined(ENABLE_NORMALMAP)
+	normalmap.xy = normalmap.xy * 2.0 - 1.0;
+	normalmap.z = sqrt(1.0 - dot(normalmap.xy, normalmap.xy));
+
+	normal = normalize(mix(normal_interp, tangent * normalmap.x + binormal * normalmap.y + normal * normalmap.z, normaldepth)) * side;
+#endif
 
 	vec3 N = normal;
 	
@@ -460,7 +499,16 @@ FRAGMENT_SHADER_CODE
 	ref_vec.z *= -1.0;
 
 	env_reflection_light = textureCubeLod(radiance_map, ref_vec, roughness * RADIANCE_MAX_LOD).xyz * bg_energy;
-	ambient_light = textureCubeLod(radiance_map, ref_vec, RADIANCE_MAX_LOD).xyz * bg_energy;
+
+	{
+		vec3 ambient_dir = normalize((radiance_inverse_xform * vec4(normal, 0.0)).xyz);
+		vec3 env_ambient = textureCubeLod(radiance_map, ambient_dir, RADIANCE_MAX_LOD).xyz * bg_energy;
+
+		ambient_light = mix(ambient_color.rgb, env_ambient, ambient_sky_contribution);
+
+	}
+
+	ambient_light *= ambient_energy;
 	
 	specular_light += env_reflection_light;
 	
