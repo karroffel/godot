@@ -225,6 +225,9 @@ uniform float light_energy;
 uniform vec4 light_color;
 uniform float light_specular;
 
+// directional
+uniform vec3 light_direction;
+
 // omni
 uniform vec3 light_position;
 uniform vec3 light_position_camera_space;
@@ -434,10 +437,8 @@ FRAGMENT_SHADER_CODE
 
 	} else if (light_type == LIGHT_TYPE_DIRECTIONAL) {
 
-		specular_light = vec3(1.0);
 
-		/*
-		vec3 light_vec = vec3(0.5, -0.5, 0.0);
+		vec3 light_vec = -light_direction;
 		vec3 attenuation = vec3(1.0, 1.0, 1.0);
 
 		light_compute(normal,
@@ -449,7 +450,7 @@ FRAGMENT_SHADER_CODE
 			      attenuation,
 			      albedo,
 			      transmission,
-			      specular, // * light_specular,
+		              specular * light_specular,
 			      roughness,
 			      metallic,
 			      rim,
@@ -459,7 +460,6 @@ FRAGMENT_SHADER_CODE
 			      anisotropy,
 			      diffuse_light,
 			      specular_light);
-		*/
 	} else if (light_type == LIGHT_TYPE_SPOT) {
 
 	}

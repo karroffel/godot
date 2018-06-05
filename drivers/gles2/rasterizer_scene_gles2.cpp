@@ -678,7 +678,7 @@ void RasterizerSceneGLES2::_render_geometry(RenderList::Element *p_element) {
 	}
 }
 
-void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList::Element **p_elements, int p_element_count, const Transform &p_view_transform, const CameraMatrix &p_projection, Environment *p_env, GLuint p_base_env, bool p_reverse_cull, bool p_alpha_pass, bool p_shadow, bool p_directional_add, bool p_directional_shadows) {
+void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements, int p_element_count, const RID *p_light_cull_result, int p_light_cull_count, const Transform &p_view_transform, const CameraMatrix &p_projection, Environment *p_env, GLuint p_base_env, bool p_reverse_cull, bool p_alpha_pass, bool p_shadow, bool p_directional_add, bool p_directional_shadows) {
 
 	Vector2 screen_pixel_size;
 	screen_pixel_size.x = 1.0 / storage->frame.current_rt->width;
@@ -872,6 +872,36 @@ void RasterizerSceneGLES2::_render_render_list(RasterizerSceneGLES2::RenderList:
 			_render_geometry(e);
 		}
 
+		for (int j = 0; j < p_light_cull_count; j++) {
+			RID light_rid = p_light_cull_result[j];
+
+			LightInstance *light = light_instance_owner.getornull(light_rid);
+
+			RasterizerStorageGLES2::Light *light_ptr = light->light_ptr;
+
+			switch (light_ptr->type) {
+				case VS::LIGHT_DIRECTIONAL: {
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_TYPE, (int)0);
+					Vector3 direction = p_view_transform.inverse().basis.xform(light->transform.basis.xform(Vector3(0, 0, -1))).normalized();
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_DIRECTION, direction);
+
+				} break;
+
+				default: {
+					continue;
+				} break;
+			}
+
+			float energy = light_ptr->param[VS::LIGHT_PARAM_ENERGY];
+			float specular = light_ptr->param[VS::LIGHT_PARAM_SPECULAR];
+
+			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_ENERGY, energy);
+			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_COLOR, light_ptr->color.to_linear());
+			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_SPECULAR, specular);
+
+			_render_geometry(e);
+		}
+
 		state.scene_shader.set_conditional(SceneShaderGLES2::LIGHT_PASS, false);
 	}
 
@@ -1028,7 +1058,7 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 
 	// render opaque things first
 	render_list.sort_by_key(false);
-	_render_render_list(render_list.elements, render_list.element_count, p_cam_transform, p_cam_projection, env, env_radiance_tex, false, false, false, false, false);
+	_render_render_list(render_list.elements, render_list.element_count, p_light_cull_result, p_light_cull_count, p_cam_transform, p_cam_projection, env, env_radiance_tex, false, false, false, false, false);
 
 	// alpha pass
 
@@ -1036,7 +1066,7 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
 	render_list.sort_by_key(true);
-	_render_render_list(&render_list.elements[render_list.max_elements - render_list.alpha_element_count], render_list.alpha_element_count, p_cam_transform, p_cam_projection, env, env_radiance_tex, false, true, false, false, false);
+	_render_render_list(&render_list.elements[render_list.max_elements - render_list.alpha_element_count], render_list.alpha_element_count, p_light_cull_result, p_light_cull_count, p_cam_transform, p_cam_projection, env, env_radiance_tex, false, true, false, false, false);
 
 	glDepthMask(GL_FALSE);
 	glDisable(GL_DEPTH_TEST);
