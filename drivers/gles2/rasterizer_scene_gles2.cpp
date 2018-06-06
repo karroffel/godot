@@ -417,13 +417,37 @@ static const GLenum gl_primitive[] = {
 	GL_TRIANGLE_FAN
 };
 
-void RasterizerSceneGLES2::_setup_material(RasterizerStorageGLES2::Material *p_material, bool p_use_radiance_map) {
+void RasterizerSceneGLES2::_setup_material(RasterizerStorageGLES2::Material *p_material, bool p_use_radiance_map, bool p_reverse_cull) {
 
 	// material parameters
 
 	state.scene_shader.set_custom_shader(p_material->shader->custom_code_id);
 
 	state.scene_shader.bind();
+
+	if (p_material->shader->spatial.no_depth_test) {
+		glDisable(GL_DEPTH_TEST);
+	} else {
+		glEnable(GL_DEPTH_TEST);
+	}
+
+	// TODO whyyyyy????
+	p_reverse_cull = true;
+
+	switch (p_material->shader->spatial.cull_mode) {
+		case RasterizerStorageGLES2::Shader::Spatial::CULL_MODE_DISABLED: {
+			glDisable(GL_CULL_FACE);
+		} break;
+
+		case RasterizerStorageGLES2::Shader::Spatial::CULL_MODE_BACK: {
+			glEnable(GL_CULL_FACE);
+			glCullFace(p_reverse_cull ? GL_FRONT : GL_BACK);
+		} break;
+		case RasterizerStorageGLES2::Shader::Spatial::CULL_MODE_FRONT: {
+			glEnable(GL_CULL_FACE);
+			glCullFace(p_reverse_cull ? GL_BACK : GL_FRONT);
+		} break;
+	}
 
 	int tc = p_material->textures.size();
 	Pair<StringName, RID> *textures = p_material->textures.ptrw();
@@ -713,7 +737,7 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 
 		_setup_geometry(e, skeleton);
 
-		_setup_material(material, use_radiance_map);
+		_setup_material(material, use_radiance_map, p_reverse_cull);
 
 		if (use_radiance_map) {
 			state.scene_shader.set_uniform(SceneShaderGLES2::RADIANCE_INVERSE_XFORM, p_view_transform);
@@ -810,7 +834,7 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 
 		{
 
-			_setup_material(material, false);
+			_setup_material(material, false, p_reverse_cull);
 
 			state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_MATRIX, p_view_transform.inverse());
 			state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_INVERSE_MATRIX, p_view_transform);
@@ -832,8 +856,7 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 
 			switch (light->light_ptr->type) {
 				case VS::LIGHT_DIRECTIONAL: {
-					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_TYPE, (int)0);
-
+					continue;
 				} break;
 
 				case VS::LIGHT_OMNI: {
@@ -841,7 +864,7 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 
 					Vector3 position = p_view_transform.inverse().xform(light->transform.origin);
 
-					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_POSITION_CAMERA_SPACE, position);
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_POSITION, position);
 
 					float range = light->light_ptr->param[VS::LIGHT_PARAM_RANGE];
 					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_RANGE, range);
@@ -852,8 +875,23 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 				} break;
 
 				case VS::LIGHT_SPOT: {
+					Vector3 position = p_view_transform.inverse().xform(light->transform.origin);
 					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_TYPE, (int)2);
-					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_POSITION, light->transform.origin);
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_POSITION, position);
+
+					Vector3 direction = p_view_transform.inverse().basis.xform(light->transform.basis.xform(Vector3(0, 0, -1))).normalized();
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_DIRECTION, direction);
+					Color attenuation = Color(0.0, 0.0, 0.0, 0.0);
+					attenuation.a = light->light_ptr->param[VS::LIGHT_PARAM_ATTENUATION];
+					float range = light->light_ptr->param[VS::LIGHT_PARAM_RANGE];
+					float spot_attenuation = light->light_ptr->param[VS::LIGHT_PARAM_SPOT_ATTENUATION];
+					float angle = light->light_ptr->param[VS::LIGHT_PARAM_SPOT_ANGLE];
+					angle = Math::cos(Math::deg2rad(angle));
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_ATTENUATION, attenuation);
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_SPOT_ATTENUATION, spot_attenuation);
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_SPOT_RANGE, spot_attenuation);
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_SPOT_ANGLE, angle);
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_RANGE, range);
 
 				} break;
 

@@ -16,7 +16,7 @@ precision mediump int;
 // attributes
 //
 
-attribute highp vec3 vertex_attrib; // attrib:0
+attribute highp vec4 vertex_attrib; // attrib:0
 attribute vec3 normal_attrib; // attrib:1
 
 #if defined(ENABLE_TANGENT_INTERP) || defined(ENABLE_NORMALMAP)
@@ -87,7 +87,7 @@ VERTEX_SHADER_GLOBALS
 
 void main() {
 
-	vertex_interp = vertex_attrib;
+	highp vec4 vertex = vertex_attrib;
 
 	vec3 normal = normal_attrib * normal_mult;
 
@@ -109,6 +109,17 @@ void main() {
 #ifdef ENABLE_UV2_INTERP
 	uv2_interp = uv2_attrib;
 #endif
+
+#if !defined(SKIP_TRANSFORM_USED) && defined(VERTEX_WORLD_COORDS_USED)
+	vertex = model_matrix * vertex;
+	normal = normalize((model_matrix * vec4(normal, 0.0)).xyz);
+#if defined(ENABLE_TANGENT_INTERP) || defined(ENABLE_NORMALMAP)
+
+	tangent = normalize((model_matrix * vec4(tangent, 0.0)),xyz);
+	binormal = normalize((model_matrix * vec4(binormal, 0.0)).xyz);
+#endif
+#endif
+
 
 	mat4 model_matrix_copy = model_matrix;
 
@@ -135,24 +146,34 @@ VERTEX_SHADER_CODE
 
 }
 
-	vec4 outvec = vec4(vertex_interp, 1.0);
+	vec4 outvec = vertex;
 
 	mat4 modelview = camera_matrix * model_matrix_copy;
 
 	vec4 model_vec = model_matrix_copy * outvec;
-	vec4 camera_vec = camera_matrix * model_vec;
-	vec4 projected_vec = projection_matrix * camera_vec;
 
 
 	// use local coordinates
-	vertex_interp = camera_vec.xyz;
+#if !defined(SKIP_TRANSFORM_USED) && !defined(VERTEX_WORLD_COORDS_USED)
+	vertex = modelview * vertex;
 	normal = normalize((modelview * vec4(normal, 0.0)).xyz);
 
 #if defined(ENABLE_TANGENT_INTERP) || defined(ENABLE_NORMALMAP)
 	tangent = normalize((modelview * vec4(tangent, 0.0)).xyz);
 	binormal = normalize((modelview * vec4(binormal, 0.0)).xyz);
 #endif
+#endif
 
+#if !defined(SKIP_TRANSFORM_USED) && defined(VERTEX_WORLD_COORDS_USED)
+	vertex = camera_matrix * vertex;
+	normal = normalize((camera_matrix * vec4(normal, 0.0)).xyz);
+#if defined(ENABLE_TANGENT_INTERP) || defined(ENABLE_NORMALMAP)
+	tangent = normalize((camera_matrix * vec4(tangent, 0.0)).xyz);
+	binormal = normalize((camera_matrix * vec4(binormal, 0.0)).xyz);
+#endif
+#endif
+
+	vertex_interp = vertex.xyz;
 	normal_interp = normal;
 
 #if defined(ENABLE_TANGENT_INTERP) || defined(ENABLE_NORMALMAP)
@@ -160,7 +181,7 @@ VERTEX_SHADER_CODE
 	binormal_interp = binormal;
 #endif
 
-	gl_Position = projected_vec;
+	gl_Position = projection_matrix * vec4(vertex_interp, 1.0);
 
 }
 
@@ -230,10 +251,14 @@ uniform vec3 light_direction;
 
 // omni
 uniform vec3 light_position;
-uniform vec3 light_position_camera_space;
 
 uniform float light_range;
 uniform vec4 light_attenuation;
+
+// spot
+uniform float light_spot_attenuation;
+uniform float light_spot_range;
+uniform float light_spot_angle;
 
 #endif
 
@@ -321,9 +346,6 @@ void light_compute(vec3 N,
 	}
 }
 
-void light_process_directional() {
-
-}
 #endif
 
 void main() {
@@ -406,7 +428,7 @@ FRAGMENT_SHADER_CODE
 #ifdef LIGHT_PASS
 
 	if (light_type == LIGHT_TYPE_OMNI) {
-		vec3 light_vec = light_position_camera_space - vertex;
+		vec3 light_vec = light_position - vertex;
 		float light_length = length(light_vec);
 
 		float normalized_distance = light_length / light_range;
@@ -437,17 +459,16 @@ FRAGMENT_SHADER_CODE
 
 	} else if (light_type == LIGHT_TYPE_DIRECTIONAL) {
 
-
 		vec3 light_vec = -light_direction;
 		vec3 attenuation = vec3(1.0, 1.0, 1.0);
 
 		light_compute(normal,
-			      normalize(light_vec),
+		              normalize(light_vec),
 			      eye_position,
 			      binormal,
 			      tangent,
 			      light_color.xyz * light_energy,
-			      attenuation,
+		              attenuation,
 			      albedo,
 			      transmission,
 		              specular * light_specular,
@@ -461,6 +482,44 @@ FRAGMENT_SHADER_CODE
 			      diffuse_light,
 			      specular_light);
 	} else if (light_type == LIGHT_TYPE_SPOT) {
+
+		vec3 light_rel_vec = light_position - vertex;
+		float light_length = length(light_rel_vec);
+		float normalized_distance = light_length / light_range;
+
+		float spot_attenuation = pow(1.0 - normalized_distance, light_attenuation.w);
+		vec3 spot_dir = light_direction;
+
+		float spot_cutoff = light_spot_angle;
+
+		float scos = max(dot(-normalize(light_rel_vec), spot_dir), spot_cutoff);
+		float spot_rim = max(0.0001, (1.0 - scos) / (1.0 - spot_cutoff));
+
+		spot_attenuation *= 1.0 - pow(spot_rim, light_spot_attenuation);
+
+		spot_attenuation *= max(0.0, dot(normalize(normal), normalize(light_rel_vec)));
+
+		vec3 light_attenuation = vec3(spot_attenuation);
+
+		light_compute(normal,
+		              normalize(light_rel_vec),
+		              eye_position,
+		              binormal,
+		              tangent,
+		              light_color.xyz * light_energy,
+		              light_attenuation,
+		              albedo,
+		              transmission,
+		              specular * light_specular,
+		              roughness,
+		              metallic,
+		              rim,
+		              rim_tint,
+		              clearcoat,
+		              clearcoat_gloss,
+		              anisotropy,
+		              diffuse_light,
+		              specular_light);
 
 	}
 
