@@ -814,12 +814,11 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 		state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_MATRIX, p_projection);
 		state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_INVERSE_MATRIX, p_projection.inverse());
 
-		state.scene_shader.set_uniform(SceneShaderGLES2::MODEL_MATRIX, e->instance->transform);
-
 		state.scene_shader.set_uniform(SceneShaderGLES2::TIME, storage->frame.time[0]);
 
 		state.scene_shader.set_uniform(SceneShaderGLES2::SCREEN_PIXEL_SIZE, screen_pixel_size);
 		state.scene_shader.set_uniform(SceneShaderGLES2::NORMAL_MULT, 1.0); // TODO mirror?
+		state.scene_shader.set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, e->instance->transform);
 
 		_render_geometry(e);
 
@@ -841,12 +840,11 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 			state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_MATRIX, p_projection);
 			state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_INVERSE_MATRIX, p_projection.inverse());
 
-			state.scene_shader.set_uniform(SceneShaderGLES2::MODEL_MATRIX, e->instance->transform);
-
 			state.scene_shader.set_uniform(SceneShaderGLES2::TIME, storage->frame.time[0]);
 
 			state.scene_shader.set_uniform(SceneShaderGLES2::SCREEN_PIXEL_SIZE, screen_pixel_size);
 			state.scene_shader.set_uniform(SceneShaderGLES2::NORMAL_MULT, 1.0); // TODO mirror?
+			state.scene_shader.set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, e->instance->transform);
 		}
 
 		for (int j = 0; j < e->instance->light_instances.size(); j++) {

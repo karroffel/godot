@@ -47,11 +47,12 @@ attribute highp vec4 bone_transform_row_2; // attrib:11
 // uniforms
 //
 
-uniform mat4 model_matrix;
 uniform mat4 camera_matrix;
 uniform mat4 camera_inverse_matrix;
 uniform mat4 projection_matrix;
 uniform mat4 projection_inverse_matrix;
+
+uniform mat4 world_transform;
 
 uniform highp float time;
 
@@ -89,6 +90,8 @@ void main() {
 
 	highp vec4 vertex = vertex_attrib;
 
+	mat4 world_matrix = world_transform;
+
 	vec3 normal = normal_attrib * normal_mult;
 
 #if defined(ENABLE_TANGENT_INTERP) || defined(ENABLE_NORMALMAP)
@@ -111,17 +114,14 @@ void main() {
 #endif
 
 #if !defined(SKIP_TRANSFORM_USED) && defined(VERTEX_WORLD_COORDS_USED)
-	vertex = model_matrix * vertex;
-	normal = normalize((model_matrix * vec4(normal, 0.0)).xyz);
+	vertex = world_matrix * vertex;
+	normal = normalize((world_matrix * vec4(normal, 0.0)).xyz);
 #if defined(ENABLE_TANGENT_INTERP) || defined(ENABLE_NORMALMAP)
 
-	tangent = normalize((model_matrix * vec4(tangent, 0.0)),xyz);
-	binormal = normalize((model_matrix * vec4(binormal, 0.0)).xyz);
+	tangent = normalize((world_matrix * vec4(tangent, 0.0)),xyz);
+	binormal = normalize((world_matrix * vec4(binormal, 0.0)).xyz);
 #endif
 #endif
-
-
-	mat4 model_matrix_copy = model_matrix;
 
 #ifdef USE_SKELETON
 	highp mat4 bone_transform = mat4(1.0);
@@ -130,7 +130,7 @@ void main() {
 	bone_transform[2] = vec4(bone_transform_row_0.z, bone_transform_row_1.z, bone_transform_row_2.z, 0.0);
 	bone_transform[3] = vec4(bone_transform_row_0.w, bone_transform_row_1.w, bone_transform_row_2.w, 1.0);
 
-	model_matrix_copy = bone_transform * model_matrix;
+	world_matrix = bone_transform * world_matrix;
 #endif
 
 
@@ -138,7 +138,9 @@ void main() {
 	vec4 instance_custom = vec4(0.0);
 
 
-	mat4 world_transform = mat4(1.0);
+	mat4 modelview = camera_matrix * world_matrix;
+
+#define world_transform world_matrix
 
 {
 
@@ -147,11 +149,6 @@ VERTEX_SHADER_CODE
 }
 
 	vec4 outvec = vertex;
-
-	mat4 modelview = camera_matrix * model_matrix_copy;
-
-	vec4 model_vec = model_matrix_copy * outvec;
-
 
 	// use local coordinates
 #if !defined(SKIP_TRANSFORM_USED) && !defined(VERTEX_WORLD_COORDS_USED)
@@ -204,11 +201,12 @@ precision mediump int;
 // uniforms
 //
 
-uniform mat4 model_matrix;
 uniform mat4 camera_matrix;
 uniform mat4 camera_inverse_matrix;
 uniform mat4 projection_matrix;
 uniform mat4 projection_inverse_matrix;
+
+uniform mat4 world_transform;
 
 uniform highp float time;
 
