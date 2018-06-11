@@ -561,6 +561,15 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 								code += "textureCube";
 							}
 
+						} else if (var_node->name == "textureLod") {
+							// emit texture call
+
+							if (op_node->arguments[1]->get_datatype() == SL::TYPE_SAMPLER2D) {
+								code += "texture2DLod";
+							} else if (op_node->arguments[1]->get_datatype() == SL::TYPE_SAMPLERCUBE) {
+								code += "textureCubeLod";
+							}
+
 						} else if (var_node->name == "mix") {
 
 							switch (op_node->arguments[3]->get_datatype()) {

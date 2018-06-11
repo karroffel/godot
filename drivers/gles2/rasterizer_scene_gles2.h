@@ -57,6 +57,8 @@ public:
 	RID default_shader;
 	RID default_shader_twosided;
 
+	uint64_t scene_pass;
+
 	RasterizerStorageGLES2 *storage;
 	struct State {
 
@@ -176,9 +178,61 @@ public:
 
 	/* SHADOW ATLAS API */
 
+	uint64_t shadow_atlas_realloc_tolerance_msec;
+
+	struct ShadowAtlas : public RID_Data {
+		enum {
+			QUADRANT_SHIFT = 27,
+			SHADOW_INDEX_MASK = (1 << QUADRANT_SHIFT) - 1,
+			SHADOW_INVALID = 0xFFFFFFFF,
+		};
+
+		struct Quadrant {
+			uint32_t subdivision;
+
+			struct Shadow {
+				RID owner;
+				uint64_t version;
+				uint64_t alloc_tick;
+
+				Shadow() {
+					version = 0;
+					alloc_tick = 0;
+				}
+			};
+
+			Vector<Shadow> shadows;
+
+			Quadrant() {
+				subdivision = 0;
+			}
+		} quadrants[4];
+
+		int size_order[4];
+		uint32_t smallest_subdiv;
+
+		int size;
+
+		GLuint fbo;
+		GLuint depth;
+
+		Map<RID, uint32_t> shadow_owners;
+	};
+
+	struct ShadowCubeMap {
+		GLuint fbo[6];
+		GLuint cubemap;
+		uint32_t size;
+	};
+
+	Vector<ShadowCubeMap> shadow_cubemaps;
+
+	RID_Owner<ShadowAtlas> shadow_atlas_owner;
+
 	RID shadow_atlas_create();
 	void shadow_atlas_set_size(RID p_atlas, int p_size);
 	void shadow_atlas_set_quadrant_subdivision(RID p_atlas, int p_quadrant, int p_subdivision);
+	bool _shadow_atlas_find_shadow(ShadowAtlas *shadow_atlas, int *p_in_quadrants, int p_quadrant_count, int p_current_subdiv, uint64_t p_tick, int &r_quadrant, int &r_shadow);
 	bool shadow_atlas_update_light(RID p_atlas, RID p_light_intance, float p_coverage, uint64_t p_light_version);
 
 	virtual int get_directional_light_shadow_size(RID p_light_intance);
@@ -281,6 +335,9 @@ public:
 		float linear_att;
 
 		// TODO passes and all that stuff ?
+		uint64_t last_scene_pass;
+
+		Set<RID> shadow_atlases; // atlases where this light is registered
 	};
 
 	mutable RID_Owner<LightInstance> light_instance_owner;

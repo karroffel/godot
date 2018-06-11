@@ -1092,6 +1092,8 @@ public:
 	void initialize();
 	void finalize();
 
+	void _copy_screen();
+
 	virtual bool has_os_feature(const String &p_feature) const;
 
 	virtual void update_dirty_resources();

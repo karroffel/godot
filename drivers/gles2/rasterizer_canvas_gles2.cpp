@@ -797,42 +797,6 @@ void RasterizerCanvasGLES2::_canvas_item_render_commands(Item *p_item, Item *cur
 void RasterizerCanvasGLES2::_copy_texscreen(const Rect2 &p_rect) {
 
 	// This isn't really working yet, so disabling for now.
-
-	/*
-	glDisable(GL_BLEND);
-
-	state.canvas_texscreen_used = true;
-
-	Vector2 wh(storage->frame.current_rt->width, storage->frame.current_rt->height);
-	Color copy_section(p_rect.position.x / wh.x, p_rect.position.y / wh.y, p_rect.size.x / wh.x, p_rect.size.y / wh.y);
-
-	if (p_rect != Rect2()) {
-		// only use section
-
-		storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_COPY_SECTION, true);
-	}
-
-
-	storage->shaders.copy.bind();
-	storage->shaders.copy.set_uniform(CopyShaderGLES2::COPY_SECTION, copy_section);
-
-	_bind_quad_buffer();
-
-	glBindFramebuffer(GL_FRAMEBUFFER, storage->frame.current_rt->copy_screen_effect.fbo);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, storage->frame.current_rt->color);
-
-	glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-	glDisableVertexAttribArray(VS::ARRAY_VERTEX);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-	glBindFramebuffer(GL_FRAMEBUFFER, storage->frame.current_rt->fbo);
-
-	state.canvas_shader.bind();
-	_bind_canvas_texture(state.current_tex, state.current_normal);
-
-	glEnable(GL_BLEND);
-	*/
 }
 
 void RasterizerCanvasGLES2::canvas_render_items(Item *p_item_list, int p_z, const Color &p_modulate, Light *p_light, const Transform2D &p_base_transform) {

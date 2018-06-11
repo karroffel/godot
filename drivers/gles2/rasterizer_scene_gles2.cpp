@@ -43,16 +43,335 @@
 
 RID RasterizerSceneGLES2::shadow_atlas_create() {
 
-	return RID();
+	ShadowAtlas *shadow_atlas = memnew(ShadowAtlas);
+	shadow_atlas->fbo = 0;
+	shadow_atlas->depth = 0;
+	shadow_atlas->size = 0;
+	shadow_atlas->smallest_subdiv = 0;
+
+	for (int i = 0; i < 4; i++) {
+		shadow_atlas->size_order[i] = i;
+	}
+
+	return shadow_atlas_owner.make_rid(shadow_atlas);
 }
 
 void RasterizerSceneGLES2::shadow_atlas_set_size(RID p_atlas, int p_size) {
+	ShadowAtlas *shadow_atlas = shadow_atlas_owner.getornull(p_atlas);
+	ERR_FAIL_COND(!shadow_atlas);
+	ERR_FAIL_COND(p_size < 0);
+
+	p_size = next_power_of_2(p_size);
+
+	if (p_size == shadow_atlas->size)
+		return;
+
+	// erase the old atlast
+	if (shadow_atlas->fbo) {
+		glDeleteTextures(1, &shadow_atlas->depth);
+		glDeleteFramebuffers(1, &shadow_atlas->fbo);
+
+		shadow_atlas->fbo = 0;
+		shadow_atlas->depth = 0;
+	}
+
+	// erase shadow atlast references from lights
+	for (Map<RID, uint32_t>::Element *E = shadow_atlas->shadow_owners.front(); E; E = E->next()) {
+		LightInstance *li = light_instance_owner.getornull(E->key());
+		ERR_CONTINUE(!li);
+		li->shadow_atlases.erase(p_atlas);
+	}
+
+	shadow_atlas->shadow_owners.clear();
+
+	shadow_atlas->size = p_size;
+
+	if (shadow_atlas->size) {
+		glGenFramebuffers(1, &shadow_atlas->fbo);
+		glBindFramebuffer(GL_FRAMEBUFFER, shadow_atlas->fbo);
+
+		// create a depth texture
+		glActiveTexture(GL_TEXTURE0);
+		glGenTextures(1, &shadow_atlas->depth);
+		glBindTexture(GL_TEXTURE_2D, shadow_atlas->depth);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT16, shadow_atlas->size, shadow_atlas->size, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, NULL);
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadow_atlas->depth, 0);
+
+		glViewport(0, 0, shadow_atlas->size, shadow_atlas->size);
+
+		glClearDepth(0.0f);
+		glClear(GL_DEPTH_BUFFER_BIT);
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}
 }
 
 void RasterizerSceneGLES2::shadow_atlas_set_quadrant_subdivision(RID p_atlas, int p_quadrant, int p_subdivision) {
+	ShadowAtlas *shadow_atlas = shadow_atlas_owner.getornull(p_atlas);
+	ERR_FAIL_COND(!shadow_atlas);
+	ERR_FAIL_INDEX(p_quadrant, 4);
+	ERR_FAIL_INDEX(p_subdivision, 16384);
+
+	uint32_t subdiv = next_power_of_2(p_subdivision);
+	if (subdiv & 0xaaaaaaaa) { // sqrt(subdiv) must be integer
+		subdiv <<= 1;
+	}
+
+	subdiv = int(Math::sqrt((float)subdiv));
+
+	if (shadow_atlas->quadrants[p_quadrant].shadows.size() == subdiv)
+		return;
+
+	// erase all data from the quadrant
+	for (int i = 0; i < shadow_atlas->quadrants[p_quadrant].shadows.size(); i++) {
+		if (shadow_atlas->quadrants[p_quadrant].shadows[i].owner.is_valid()) {
+			shadow_atlas->shadow_owners.erase(shadow_atlas->quadrants[p_quadrant].shadows[i].owner);
+
+			LightInstance *li = light_instance_owner.getornull(shadow_atlas->quadrants[p_quadrant].shadows[i].owner);
+			ERR_CONTINUE(!li);
+			li->shadow_atlases.erase(p_atlas);
+		}
+	}
+
+	shadow_atlas->quadrants[p_quadrant].shadows.resize(0);
+	shadow_atlas->quadrants[p_quadrant].shadows.resize(subdiv);
+	shadow_atlas->quadrants[p_quadrant].subdivision = subdiv;
+
+	// cache the smallest subdivision for faster allocations
+
+	shadow_atlas->smallest_subdiv = 1 << 30;
+
+	for (int i = 0; i < 4; i++) {
+		if (shadow_atlas->quadrants[i].subdivision) {
+			shadow_atlas->smallest_subdiv = MIN(shadow_atlas->smallest_subdiv, shadow_atlas->quadrants[i].subdivision);
+		}
+	}
+
+	if (shadow_atlas->smallest_subdiv == 1 << 30) {
+		shadow_atlas->smallest_subdiv = 0;
+	}
+
+	// re-sort the quadrants
+
+	int swaps = 0;
+	do {
+		swaps = 0;
+
+		for (int i = 0; i < 3; i++) {
+			if (shadow_atlas->quadrants[shadow_atlas->size_order[i]].subdivision < shadow_atlas->quadrants[shadow_atlas->size_order[i + 1]].subdivision) {
+				SWAP(shadow_atlas->size_order[i], shadow_atlas->size_order[i + 1]);
+				swaps++;
+			}
+		}
+
+	} while (swaps > 0);
+}
+
+bool RasterizerSceneGLES2::_shadow_atlas_find_shadow(ShadowAtlas *shadow_atlas, int *p_in_quadrants, int p_quadrant_count, int p_current_subdiv, uint64_t p_tick, int &r_quadrant, int &r_shadow) {
+
+	for (int i = p_quadrant_count - 1; i >= 0; i--) {
+		int qidx = p_in_quadrants[i];
+
+		if (shadow_atlas->quadrants[qidx].subdivision == (uint32_t)p_current_subdiv) {
+			return false;
+		}
+
+		// look for an empty space
+
+		int sc = shadow_atlas->quadrants[qidx].shadows.size();
+
+		ShadowAtlas::Quadrant::Shadow *sarr = shadow_atlas->quadrants[qidx].shadows.ptrw();
+
+		int found_free_idx = -1; // found a free one
+		int found_used_idx = -1; // found an existing one, must steal it
+		uint64_t min_pass = 0; // pass of the existing one, try to use the least recently
+
+		for (int j = 0; j < sc; j++) {
+			if (!sarr[j].owner.is_valid()) {
+				found_free_idx = j;
+				break;
+			}
+
+			LightInstance *sli = light_instance_owner.getornull(sarr[j].owner);
+			ERR_CONTINUE(!sli);
+
+			if (sli->last_scene_pass != scene_pass) {
+
+				// was just allocated, don't kill it so soon, wait a bit...
+
+				if (p_tick - sarr[j].alloc_tick < shadow_atlas_realloc_tolerance_msec) {
+					continue;
+				}
+
+				if (found_used_idx == -1 || sli->last_scene_pass < min_pass) {
+					found_used_idx = j;
+					min_pass = sli->last_scene_pass;
+				}
+			}
+		}
+
+		if (found_free_idx == -1 && found_used_idx == -1) {
+			continue; // nothing found
+		}
+
+		if (found_free_idx == -1 && found_used_idx != -1) {
+			found_free_idx = found_used_idx;
+		}
+
+		r_quadrant = qidx;
+		r_shadow = found_free_idx;
+
+		return true;
+	}
+
+	return false;
 }
 
 bool RasterizerSceneGLES2::shadow_atlas_update_light(RID p_atlas, RID p_light_intance, float p_coverage, uint64_t p_light_version) {
+
+	ShadowAtlas *shadow_atlas = shadow_atlas_owner.getornull(p_atlas);
+	ERR_FAIL_COND_V(!shadow_atlas, false);
+
+	LightInstance *li = light_instance_owner.getornull(p_light_intance);
+	ERR_FAIL_COND_V(!li, false);
+
+	if (shadow_atlas->size == 0 || shadow_atlas->smallest_subdiv == 0) {
+		return false;
+	}
+
+	uint32_t quad_size = shadow_atlas->size >> 1;
+	int desired_fit = MIN(quad_size / shadow_atlas->smallest_subdiv, next_power_of_2(quad_size * p_coverage));
+
+	int valid_quadrants[4];
+	int valid_quadrant_count = 0;
+	int best_size = -1;
+	int best_subdiv = -1;
+
+	for (int i = 0; i < 4; i++) {
+		int q = shadow_atlas->size_order[i];
+		int sd = shadow_atlas->quadrants[q].subdivision;
+
+		if (sd == 0) {
+			continue;
+		}
+
+		int max_fit = quad_size / sd;
+
+		if (best_size != -1 && max_fit > best_size) {
+			break; // what we asked for is bigger than this.
+		}
+
+		valid_quadrants[valid_quadrant_count] = q;
+		valid_quadrant_count++;
+
+		best_subdiv = sd;
+
+		if (max_fit >= desired_fit) {
+			best_size = max_fit;
+		}
+	}
+
+	ERR_FAIL_COND_V(valid_quadrant_count == 0, false); // no suitable block available
+
+	uint64_t tick = OS::get_singleton()->get_ticks_msec();
+
+	if (shadow_atlas->shadow_owners.has(p_light_intance)) {
+		// light was already known!
+
+		uint32_t key = shadow_atlas->shadow_owners[p_light_intance];
+		uint32_t q = (key >> ShadowAtlas::QUADRANT_SHIFT) & 0x3;
+		uint32_t s = key & ShadowAtlas::SHADOW_INDEX_MASK;
+
+		bool should_realloc = shadow_atlas->quadrants[q].subdivision != (uint32_t)best_subdiv && (shadow_atlas->quadrants[q].shadows[s].alloc_tick - tick > shadow_atlas_realloc_tolerance_msec);
+
+		bool should_redraw = shadow_atlas->quadrants[q].shadows[s].version != p_light_version;
+
+		if (!should_realloc) {
+			shadow_atlas->quadrants[q].shadows[s].version = p_light_version;
+			return should_redraw;
+		}
+
+		int new_quadrant;
+		int new_shadow;
+
+		// find a better place
+
+		if (_shadow_atlas_find_shadow(shadow_atlas, valid_quadrants, valid_quadrant_count, shadow_atlas->quadrants[q].subdivision, tick, new_quadrant, new_shadow)) {
+			// found a better place
+
+			ShadowAtlas::Quadrant::Shadow *sh = &shadow_atlas->quadrants[new_quadrant].shadows[new_shadow];
+			if (sh->owner.is_valid()) {
+				// it is take but invalid, so we can take it
+
+				shadow_atlas->shadow_owners.erase(sh->owner);
+				LightInstance *sli = light_instance_owner.get(sh->owner);
+				sli->shadow_atlases.erase(p_atlas);
+			}
+
+			// erase previous
+			shadow_atlas->quadrants[q].shadows[s].version = 0;
+			shadow_atlas->quadrants[q].shadows[s].owner = RID();
+
+			sh->owner = p_light_intance;
+			sh->alloc_tick = tick;
+			sh->version = p_light_version;
+			li->shadow_atlases.insert(p_atlas);
+
+			// make a new key
+			key = new_quadrant << ShadowAtlas::QUADRANT_SHIFT;
+			key |= new_shadow;
+
+			// update it in the map
+			shadow_atlas->shadow_owners[p_light_intance] = key;
+
+			// make it dirty, so we redraw
+			return true;
+		}
+
+		// no better place found, so we keep the current place
+
+		shadow_atlas->quadrants[q].shadows[s].version = p_light_version;
+
+		return should_redraw;
+	}
+
+	int new_quadrant;
+	int new_shadow;
+
+	if (_shadow_atlas_find_shadow(shadow_atlas, valid_quadrants, valid_quadrant_count, -1, tick, new_quadrant, new_shadow)) {
+		// found a better place
+
+		ShadowAtlas::Quadrant::Shadow *sh = &shadow_atlas->quadrants[new_quadrant].shadows[new_shadow];
+		if (sh->owner.is_valid()) {
+			// it is take but invalid, so we can take it
+
+			shadow_atlas->shadow_owners.erase(sh->owner);
+			LightInstance *sli = light_instance_owner.get(sh->owner);
+			sli->shadow_atlases.erase(p_atlas);
+		}
+
+		sh->owner = p_light_intance;
+		sh->alloc_tick = tick;
+		sh->version = p_light_version;
+		li->shadow_atlases.insert(p_atlas);
+
+		// make a new key
+		uint32_t key = new_quadrant << ShadowAtlas::QUADRANT_SHIFT;
+		key |= new_shadow;
+
+		// update it in the map
+		shadow_atlas->shadow_owners[p_light_intance] = key;
+
+		// make it dirty, so we redraw
+		return true;
+	}
+
 	return false;
 }
 
@@ -239,6 +558,8 @@ RID RasterizerSceneGLES2::light_instance_create(RID p_light) {
 
 	LightInstance *light_instance = memnew(LightInstance);
 
+	light_instance->last_scene_pass = 0;
+
 	light_instance->light = p_light;
 	light_instance->light_ptr = storage->light_owner.getornull(p_light);
 
@@ -269,6 +590,8 @@ void RasterizerSceneGLES2::light_instance_mark_visible(RID p_light_instance) {
 
 	LightInstance *light_instance = light_instance_owner.getornull(p_light_instance);
 	ERR_FAIL_COND(!light_instance);
+
+	light_instance->last_scene_pass = scene_pass;
 }
 
 //////////////////////
@@ -455,6 +778,10 @@ void RasterizerSceneGLES2::_setup_material(RasterizerStorageGLES2::Material *p_m
 	ShaderLanguage::ShaderNode::Uniform::Hint *texture_hints = p_material->shader->texture_hints.ptrw();
 
 	int num_default_tex = p_use_radiance_map ? 1 : 0;
+
+	if (p_material->shader->spatial.uses_screen_texture) {
+		num_default_tex = MIN(num_default_tex, 2);
+	}
 
 	for (int i = 0; i < tc; i++) {
 
@@ -710,20 +1037,57 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 
 	bool use_radiance_map = false;
 
-	if (p_base_env) {
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_CUBE_MAP, p_base_env);
-		use_radiance_map = true;
-	}
-
-	state.scene_shader.set_conditional(SceneShaderGLES2::USE_RADIANCE_MAP, use_radiance_map);
-
 	for (int i = 0; i < p_element_count; i++) {
 		RenderList::Element *e = p_elements[i];
 
 		RasterizerStorageGLES2::Material *material = e->material;
 
 		RasterizerStorageGLES2::Skeleton *skeleton = storage->skeleton_owner.getornull(e->instance->skeleton);
+
+		bool uses_screen_tex = false;
+
+		if (material->shader->spatial.uses_screen_texture) {
+			// copy screen
+			uses_screen_tex = true;
+
+			glDepthMask(GL_FALSE);
+			glDisable(GL_DEPTH_TEST);
+			glDisable(GL_CULL_FACE);
+			glDisable(GL_BLEND);
+			glDepthFunc(GL_LEQUAL);
+			glColorMask(1, 1, 1, 1);
+
+			storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_COPY_SECTION, false);
+			storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUSTOM_ALPHA, false);
+			storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_PANORAMA, false);
+			storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUBEMAP, false);
+			storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_MULTIPLIER, false);
+
+			storage->shaders.copy.bind();
+
+			glBindFramebuffer(GL_FRAMEBUFFER, storage->frame.current_rt->copy_screen_effect.fbo);
+
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, storage->frame.current_rt->color);
+
+			glViewport(0, 0, storage->frame.current_rt->width, storage->frame.current_rt->height);
+
+			storage->_copy_screen();
+
+			glBindFramebuffer(GL_FRAMEBUFFER, storage->frame.current_rt->fbo);
+
+			glActiveTexture(GL_TEXTURE2);
+			glBindTexture(GL_TEXTURE_2D, storage->frame.current_rt->copy_screen_effect.color);
+
+			glViewport(0, 0, storage->frame.current_rt->width, storage->frame.current_rt->height);
+		}
+
+		if (p_base_env) {
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, p_base_env);
+			use_radiance_map = true;
+		}
+		state.scene_shader.set_conditional(SceneShaderGLES2::USE_RADIANCE_MAP, use_radiance_map);
 
 		if (material->shader->spatial.unshaded) {
 			state.scene_shader.set_conditional(SceneShaderGLES2::USE_RADIANCE_MAP, false);
@@ -823,6 +1187,9 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 		_render_geometry(e);
 
 		// render lights
+
+		if (material->shader->spatial.unshaded)
+			continue;
 
 		state.scene_shader.set_conditional(SceneShaderGLES2::LIGHT_PASS, true);
 
@@ -1112,6 +1479,7 @@ void RasterizerSceneGLES2::render_shadow(RID p_light, RID p_shadow_atlas, int p_
 }
 
 void RasterizerSceneGLES2::set_scene_pass(uint64_t p_pass) {
+	scene_pass = p_pass;
 }
 
 bool RasterizerSceneGLES2::free(RID p_rid) {
@@ -1125,6 +1493,8 @@ void RasterizerSceneGLES2::initialize() {
 	state.scene_shader.init();
 
 	render_list.init();
+
+	shadow_atlas_realloc_tolerance_msec = 500;
 
 	{
 		//default material and shader

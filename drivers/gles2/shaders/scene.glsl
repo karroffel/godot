@@ -215,6 +215,12 @@ uniform highp float time;
 uniform vec2 screen_pixel_size;
 #endif
 
+uniform highp sampler2D depth_buffer; //texunit:1
+
+#if defined(SCREEN_TEXTURE_USED)
+uniform highp sampler2D screen_texture; //texunit:2
+#endif
+
 #ifdef USE_RADIANCE_MAP
 
 #define RADIANCE_MAX_LOD 6.0
