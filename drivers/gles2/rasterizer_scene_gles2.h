@@ -322,7 +322,15 @@ public:
 
 	struct LightInstance : public RID_Data {
 
-		// TODO Shadows
+		struct ShadowTransform {
+			CameraMatrix camera;
+			Transform transform;
+			float farplane;
+			float split;
+			float bias_scale;
+		};
+
+		ShadowTransform shadow_transform[4];
 
 		RID self;
 		RID light;

@@ -39,6 +39,17 @@
 #define glClearDepth glClearDepthf
 #endif
 
+static const GLenum _cube_side_enum[6] = {
+
+	GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+	GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+	GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+	GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
+	GL_TEXTURE_CUBE_MAP_NEGATIVE_Z,
+	GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
+
+};
+
 /* SHADOW ATLAS API */
 
 RID RasterizerSceneGLES2::shadow_atlas_create() {
@@ -583,7 +594,19 @@ void RasterizerSceneGLES2::light_instance_set_shadow_transform(RID p_light_insta
 	LightInstance *light_instance = light_instance_owner.getornull(p_light_instance);
 	ERR_FAIL_COND(!light_instance);
 
-	// TODO;
+	if (light_instance->light_ptr->type != VS::LIGHT_DIRECTIONAL) {
+		p_pass = 0;
+	}
+
+	ERR_FAIL_INDEX(p_pass, 4);
+
+	light_instance->shadow_transform[p_pass] = {
+		p_projection,
+		p_transform,
+		p_far,
+		p_split,
+		p_bias_scale
+	};
 }
 
 void RasterizerSceneGLES2::light_instance_mark_visible(RID p_light_instance) {
@@ -677,6 +700,26 @@ void RasterizerSceneGLES2::_add_geometry_with_material(RasterizerStorageGLES2::G
 	// TODO check render pass of geometry
 
 	// TODO check directional light flag
+
+	if (p_depth_pass) {
+		// if we are in the depth pass we can sort out a few things to improve performance
+
+		if (has_blend_alpha || p_material->shader->spatial.uses_depth_texture || (has_base_alpha && p_material->shader->spatial.depth_draw_mode != RasterizerStorageGLES2::Shader::Spatial::DEPTH_DRAW_ALPHA_PREPASS)) {
+			return;
+		}
+
+		if (p_material->shader->spatial.uses_alpha_scissor && !p_material->shader->spatial.writes_modelview_or_projection && !p_material->shader->spatial.uses_vertex && !p_material->shader->spatial.uses_discard && p_material->shader->spatial.depth_draw_mode != RasterizerStorageGLES2::Shader::Spatial::DEPTH_DRAW_ALPHA_PREPASS) {
+
+			// shader doesn't use discard or writes a custom vertex position,
+			// so we can use a stripped down shader instead
+
+			// TODO twosided and worldcoord stuff
+
+			p_material = storage->material_owner.getptr(default_material_twosided);
+		}
+
+		has_alpha = false;
+	}
 
 	e->sort_key |= uint64_t(e->geometry->index) << RenderList::SORT_KEY_GEOMETRY_INDEX_SHIFT;
 	e->sort_key |= uint64_t(e->instance->base_type) << RenderList::SORT_KEY_GEOMETRY_TYPE_SHIFT;
@@ -1030,6 +1073,10 @@ void RasterizerSceneGLES2::_render_geometry(RenderList::Element *p_element) {
 }
 
 void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements, int p_element_count, const RID *p_light_cull_result, int p_light_cull_count, const Transform &p_view_transform, const CameraMatrix &p_projection, Environment *p_env, GLuint p_base_env, bool p_reverse_cull, bool p_alpha_pass, bool p_shadow, bool p_directional_add, bool p_directional_shadows) {
+
+	if (p_shadow) {
+		print_line("Render a shadow!");
+	}
 
 	Vector2 screen_pixel_size;
 	screen_pixel_size.x = 1.0 / storage->frame.current_rt->width;
@@ -1473,9 +1520,143 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 
 	glDepthMask(GL_FALSE);
 	glDisable(GL_DEPTH_TEST);
+
+	ShadowAtlas *shadow_atlas = shadow_atlas_owner.getornull(p_shadow_atlas);
+	if (shadow_atlas) {
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, shadow_atlas->depth);
+
+		glViewport(0, 0, storage->frame.current_rt->width / 2, storage->frame.current_rt->height / 2);
+		storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUBEMAP, false);
+		storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_COPY_SECTION, false);
+		storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUSTOM_ALPHA, false);
+		storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_MULTIPLIER, false);
+		storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_PANORAMA, false);
+		storage->shaders.copy.bind();
+
+		storage->_copy_screen();
+	}
 }
 
 void RasterizerSceneGLES2::render_shadow(RID p_light, RID p_shadow_atlas, int p_pass, InstanceBase **p_cull_result, int p_cull_count) {
+
+	LightInstance *light_instance = light_instance_owner.getornull(p_light);
+	ERR_FAIL_COND(!light_instance);
+
+	RasterizerStorageGLES2::Light *light = light_instance->light_ptr;
+	ERR_FAIL_COND(!light);
+
+	uint32_t x;
+	uint32_t y;
+	uint32_t width;
+	uint32_t height;
+	uint32_t vp_height;
+
+	float zfar = 0;
+	bool flip_facing = false;
+	int custom_vp_size = 0;
+
+	GLuint fbo = 0;
+
+	int current_cubemap = -1;
+	float bias = 0;
+	float normal_bias = 0;
+
+	CameraMatrix light_projection;
+	Transform light_transform;
+
+	// TODO directional light
+
+	{
+		ShadowAtlas *shadow_atlas = shadow_atlas_owner.getornull(p_shadow_atlas);
+		ERR_FAIL_COND(!shadow_atlas);
+		ERR_FAIL_COND(!shadow_atlas->shadow_owners.has(p_light));
+
+		fbo = shadow_atlas->fbo;
+		vp_height = shadow_atlas->size;
+
+		uint32_t key = shadow_atlas->shadow_owners[p_light];
+
+		uint32_t quadrant = (key >> ShadowAtlas::QUADRANT_SHIFT) & 0x03;
+		uint32_t shadow = key & ShadowAtlas::SHADOW_INDEX_MASK;
+
+		ERR_FAIL_INDEX((int)shadow, shadow_atlas->quadrants[quadrant].shadows.size());
+
+		uint32_t quadrant_size = shadow_atlas->size >> 1;
+
+		x = (quadrant & 1) * quadrant_size;
+		y = (quadrant >> 1) * quadrant_size;
+
+		uint32_t shadow_size = (quadrant_size / shadow_atlas->quadrants[quadrant].subdivision);
+		x += (shadow % shadow_atlas->quadrants[quadrant].subdivision) * shadow_size;
+		y += (shadow / shadow_atlas->quadrants[quadrant].subdivision) * shadow_size;
+
+		width = shadow_size;
+		height = shadow_size;
+
+		if (light->type == VS::LIGHT_SPOT) {
+			light_projection = light_instance->shadow_transform[0].camera;
+			light_transform = light_instance->shadow_transform[0].transform;
+
+			flip_facing = false;
+			zfar = light->param[VS::LIGHT_PARAM_RANGE];
+			bias = light->param[VS::LIGHT_PARAM_SHADOW_BIAS];
+			normal_bias = light->param[VS::LIGHT_PARAM_SHADOW_NORMAL_BIAS];
+		}
+	}
+
+	render_list.clear();
+
+	_fill_render_list(p_cull_result, p_cull_count, true, true);
+
+	render_list.sort_by_depth(false);
+
+	glDisable(GL_BLEND);
+	glDisable(GL_DITHER);
+	glEnable(GL_DEPTH_TEST);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+	glDepthMask(GL_TRUE);
+	glColorMask(0, 0, 0, 0);
+
+	if (custom_vp_size) {
+		glViewport(0, 0, custom_vp_size, custom_vp_size);
+		glScissor(0, 0, custom_vp_size, custom_vp_size);
+	} else {
+		glViewport(x, y, width, height);
+		glScissor(x, y, width, height);
+	}
+
+	glEnable(GL_SCISSOR_TEST);
+	glClearDepth(1.0f);
+	glClear(GL_DEPTH_BUFFER_BIT);
+	glDisable(GL_SCISSOR_TEST);
+
+	state.scene_shader.set_conditional(SceneShaderGLES2::RENDER_DEPTH, true);
+
+	_render_render_list(render_list.elements, render_list.element_count, NULL, 0, light_transform, light_projection, NULL, 0, false, false, true, false, false);
+
+	state.scene_shader.set_conditional(SceneShaderGLES2::RENDER_DEPTH, false);
+
+	ShadowAtlas *shadow_atlas = shadow_atlas_owner.getornull(p_shadow_atlas);
+
+	storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_COPY_SECTION, false);
+	storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUSTOM_ALPHA, false);
+	storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_PANORAMA, false);
+	storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUBEMAP, false);
+	storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_MULTIPLIER, false);
+
+	storage->shaders.copy.bind();
+
+	glBindFramebuffer(GL_FRAMEBUFFER, storage->frame.current_rt->fbo);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, shadow_atlas->depth);
+
+	glViewport(0, 0, storage->frame.current_rt->width, storage->frame.current_rt->height);
+
+	storage->_copy_screen();
 }
 
 void RasterizerSceneGLES2::set_scene_pass(uint64_t p_pass) {
@@ -1515,6 +1696,46 @@ void RasterizerSceneGLES2::initialize() {
 		glBindBuffer(GL_ARRAY_BUFFER, state.sky_verts);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(Vector3) * 8, NULL, GL_DYNAMIC_DRAW);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
+	}
+
+	// cubemaps for shadows
+	{
+		int max_shadow_cubemap_sampler_size = 512;
+
+		int cube_size = max_shadow_cubemap_sampler_size;
+
+		glActiveTexture(GL_TEXTURE0);
+
+		while (cube_size >= 32) {
+
+			ShadowCubeMap cube;
+
+			cube.size = cube_size;
+
+			glGenTextures(1, &cube.cubemap);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, cube.cubemap);
+
+			for (int i = 0; i < 6; i++) {
+				glTexImage2D(_cube_side_enum[i], 0, GL_DEPTH_COMPONENT16, cube_size, cube_size, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, NULL);
+			}
+
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+			glGenFramebuffers(6, cube.fbo);
+			for (int i = 0; i < 6; i++) {
+
+				glBindFramebuffer(GL_FRAMEBUFFER, cube.fbo[i]);
+				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, _cube_side_enum[i], cube.cubemap, 0);
+			}
+
+			shadow_cubemaps.push_back(cube);
+
+			cube_size >>= 1;
+		}
 	}
 }
 

@@ -178,6 +178,12 @@ VERTEX_SHADER_CODE
 	binormal_interp = binormal;
 #endif
 
+#ifdef RENDER_DEPTH
+
+	// TODO depth bias thingy
+
+#endif
+
 	gl_Position = projection_matrix * vec4(vertex_interp, 1.0);
 
 }
@@ -527,31 +533,12 @@ FRAGMENT_SHADER_CODE
 
 	}
 
-//	vec3 light_income_vector = (camera_matrix * vec4(light_position, 1.0)).xyz - vertex_interp;
-
-//	float intensity = length(light_income_vector);
-
-//	intensity = intensity / light_range;
-
-//	intensity = clamp(intensity, 0.0, 1.0);
-
-//	intensity = 1.0 - intensity;
-
-	// normalize the light vector
-
-//	light_income_vector = normalize(light_income_vector);
-
-	// is pixel directly lit?
-
-//	float NdotL = dot(normal_interp, light_income_vector);
-
-//	NdotL = clamp(NdotL, 0.0, 1.0);
-
-//	color = vec4(intensity) * NdotL;
-
 	gl_FragColor = vec4(ambient_light + diffuse_light + specular_light, alpha);
 #else
 
+#ifdef RENDER_DEPTH
+
+#else
 
 #ifdef USE_RADIANCE_MAP
 
@@ -599,6 +586,7 @@ FRAGMENT_SHADER_CODE
 #else
 	gl_FragColor = vec4(albedo, alpha);
 #endif
+#endif // RENDER_DEPTH
 
 
 #endif // lighting
