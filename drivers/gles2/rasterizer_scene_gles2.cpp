@@ -116,6 +116,8 @@ void RasterizerSceneGLES2::shadow_atlas_set_size(RID p_atlas, int p_size) {
 
 		glViewport(0, 0, shadow_atlas->size, shadow_atlas->size);
 
+		glDepthMask(GL_TRUE);
+
 		glClearDepth(0.0f);
 		glClear(GL_DEPTH_BUFFER_BIT);
 
@@ -783,7 +785,7 @@ static const GLenum gl_primitive[] = {
 	GL_TRIANGLE_FAN
 };
 
-void RasterizerSceneGLES2::_setup_material(RasterizerStorageGLES2::Material *p_material, bool p_use_radiance_map, bool p_reverse_cull) {
+void RasterizerSceneGLES2::_setup_material(RasterizerStorageGLES2::Material *p_material, bool p_use_radiance_map, bool p_reverse_cull, bool p_shadow_atlas) {
 
 	// material parameters
 
@@ -824,6 +826,10 @@ void RasterizerSceneGLES2::_setup_material(RasterizerStorageGLES2::Material *p_m
 
 	if (p_material->shader->spatial.uses_screen_texture) {
 		num_default_tex = MIN(num_default_tex, 2);
+	}
+
+	if (p_shadow_atlas) {
+		num_default_tex = MIN(num_default_tex, 3);
 	}
 
 	for (int i = 0; i < tc; i++) {
@@ -1072,11 +1078,13 @@ void RasterizerSceneGLES2::_render_geometry(RenderList::Element *p_element) {
 	}
 }
 
-void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements, int p_element_count, const RID *p_light_cull_result, int p_light_cull_count, const Transform &p_view_transform, const CameraMatrix &p_projection, Environment *p_env, GLuint p_base_env, bool p_reverse_cull, bool p_alpha_pass, bool p_shadow, bool p_directional_add, bool p_directional_shadows) {
+void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements, int p_element_count, const RID *p_light_cull_result, int p_light_cull_count, const Transform &p_view_transform, const CameraMatrix &p_projection, RID p_shadow_atlas, Environment *p_env, GLuint p_base_env, float p_shadow_bias, float p_shadow_normal_bias, bool p_reverse_cull, bool p_alpha_pass, bool p_shadow, bool p_directional_add, bool p_directional_shadows) {
 
 	if (p_shadow) {
 		print_line("Render a shadow!");
 	}
+
+	ShadowAtlas *shadow_atlas = shadow_atlas_owner.getornull(p_shadow_atlas);
 
 	Vector2 screen_pixel_size;
 	screen_pixel_size.x = 1.0 / storage->frame.current_rt->width;
@@ -1090,44 +1098,6 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 		RasterizerStorageGLES2::Material *material = e->material;
 
 		RasterizerStorageGLES2::Skeleton *skeleton = storage->skeleton_owner.getornull(e->instance->skeleton);
-
-		bool uses_screen_tex = false;
-
-		if (material->shader->spatial.uses_screen_texture) {
-			// copy screen
-			uses_screen_tex = true;
-
-			glDepthMask(GL_FALSE);
-			glDisable(GL_DEPTH_TEST);
-			glDisable(GL_CULL_FACE);
-			glDisable(GL_BLEND);
-			glDepthFunc(GL_LEQUAL);
-			glColorMask(1, 1, 1, 1);
-
-			storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_COPY_SECTION, false);
-			storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUSTOM_ALPHA, false);
-			storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_PANORAMA, false);
-			storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUBEMAP, false);
-			storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_MULTIPLIER, false);
-
-			storage->shaders.copy.bind();
-
-			glBindFramebuffer(GL_FRAMEBUFFER, storage->frame.current_rt->copy_screen_effect.fbo);
-
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, storage->frame.current_rt->color);
-
-			glViewport(0, 0, storage->frame.current_rt->width, storage->frame.current_rt->height);
-
-			storage->_copy_screen();
-
-			glBindFramebuffer(GL_FRAMEBUFFER, storage->frame.current_rt->fbo);
-
-			glActiveTexture(GL_TEXTURE2);
-			glBindTexture(GL_TEXTURE_2D, storage->frame.current_rt->copy_screen_effect.color);
-
-			glViewport(0, 0, storage->frame.current_rt->width, storage->frame.current_rt->height);
-		}
 
 		if (p_base_env) {
 			glActiveTexture(GL_TEXTURE0);
@@ -1152,6 +1122,11 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 
 		if (use_radiance_map) {
 			state.scene_shader.set_uniform(SceneShaderGLES2::RADIANCE_INVERSE_XFORM, p_view_transform);
+		}
+
+		if (p_shadow) {
+			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_BIAS, p_shadow_bias);
+			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_NORMAL_BIAS, p_shadow_normal_bias);
 		}
 
 		if (p_env) {
@@ -1247,7 +1222,13 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 
 		{
 
-			_setup_material(material, false, p_reverse_cull);
+			bool has_shadow_atlas = shadow_atlas != NULL;
+			_setup_material(material, false, p_reverse_cull, has_shadow_atlas);
+
+			if (has_shadow_atlas) {
+				glActiveTexture(GL_TEXTURE3);
+				glBindTexture(GL_TEXTURE_2D, shadow_atlas->depth);
+			}
 
 			state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_MATRIX, p_view_transform.inverse());
 			state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_INVERSE_MATRIX, p_view_transform);
@@ -1304,6 +1285,53 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_SPOT_RANGE, spot_attenuation);
 					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_SPOT_ANGLE, angle);
 					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_RANGE, range);
+
+					if (light->light_ptr->shadow && shadow_atlas && shadow_atlas->shadow_owners.has(light->self)) {
+						uint32_t key = shadow_atlas->shadow_owners[light->self];
+
+						uint32_t quadrant = (key >> ShadowAtlas::QUADRANT_SHIFT) & 0x03;
+						uint32_t shadow = key & ShadowAtlas::SHADOW_INDEX_MASK;
+
+						ERR_CONTINUE(shadow >= (uint32_t)shadow_atlas->quadrants[quadrant].shadows.size());
+
+						uint32_t atlas_size = shadow_atlas->size;
+						uint32_t quadrant_size = atlas_size >> 1;
+
+						uint32_t x = (quadrant & 1) * quadrant_size;
+						uint32_t y = (quadrant >> 1) * quadrant_size;
+
+						uint32_t shadow_size = (quadrant_size / shadow_atlas->quadrants[quadrant].subdivision);
+						x += (shadow % shadow_atlas->quadrants[quadrant].subdivision) * shadow_size;
+						y += (shadow / shadow_atlas->quadrants[quadrant].subdivision) * shadow_size;
+
+						uint32_t width = shadow_size;
+						uint32_t height = shadow_size;
+
+						Rect2 rect(float(x) / atlas_size, float(y) / atlas_size, float(width) / atlas_size, float(height) / atlas_size);
+
+						Color light_clamp;
+						light_clamp[0] = rect.position.x;
+						light_clamp[1] = rect.position.y;
+						light_clamp[2] = rect.size.x;
+						light_clamp[3] = rect.size.y;
+
+						Transform modelview = (p_view_transform.inverse() * light->transform).inverse();
+
+						CameraMatrix bias;
+						bias.set_light_bias();
+
+						CameraMatrix rectm;
+						rectm.set_light_atlas_rect(rect);
+
+						CameraMatrix shadow_matrix = rectm * bias * light->shadow_transform[0].camera * modelview;
+
+						state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_HAS_SHADOW, 1.0);
+						state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_SHADOW_MATRIX, shadow_matrix);
+						state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_CLAMP, light_clamp);
+
+					} else {
+						state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_HAS_SHADOW, 0.0);
+					}
 
 				} break;
 
@@ -1508,7 +1536,7 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 
 	// render opaque things first
 	render_list.sort_by_key(false);
-	_render_render_list(render_list.elements, render_list.element_count, p_light_cull_result, p_light_cull_count, p_cam_transform, p_cam_projection, env, env_radiance_tex, false, false, false, false, false);
+	_render_render_list(render_list.elements, render_list.element_count, p_light_cull_result, p_light_cull_count, p_cam_transform, p_cam_projection, p_shadow_atlas, env, env_radiance_tex, 0.0, 0.0, false, false, false, false, false);
 
 	// alpha pass
 
@@ -1516,17 +1544,20 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
 	render_list.sort_by_key(true);
-	_render_render_list(&render_list.elements[render_list.max_elements - render_list.alpha_element_count], render_list.alpha_element_count, p_light_cull_result, p_light_cull_count, p_cam_transform, p_cam_projection, env, env_radiance_tex, false, true, false, false, false);
+	_render_render_list(&render_list.elements[render_list.max_elements - render_list.alpha_element_count], render_list.alpha_element_count, p_light_cull_result, p_light_cull_count, p_cam_transform, p_cam_projection, p_shadow_atlas, env, env_radiance_tex, 0.0, 0.0, false, true, false, false, false);
 
 	glDepthMask(GL_FALSE);
 	glDisable(GL_DEPTH_TEST);
 
+#define GLES2_SHADOW_ATLAS_DEBUG_VIEW
+
+#ifdef GLES2_SHADOW_ATLAS_DEBUG_VIEW
 	ShadowAtlas *shadow_atlas = shadow_atlas_owner.getornull(p_shadow_atlas);
 	if (shadow_atlas) {
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, shadow_atlas->depth);
 
-		glViewport(0, 0, storage->frame.current_rt->width / 2, storage->frame.current_rt->height / 2);
+		glViewport(0, 0, storage->frame.current_rt->width / 4, storage->frame.current_rt->height / 4);
 		storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUBEMAP, false);
 		storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_COPY_SECTION, false);
 		storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUSTOM_ALPHA, false);
@@ -1536,6 +1567,7 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 
 		storage->_copy_screen();
 	}
+#endif
 }
 
 void RasterizerSceneGLES2::render_shadow(RID p_light, RID p_shadow_atlas, int p_pass, InstanceBase **p_cull_result, int p_cull_count) {
@@ -1635,7 +1667,7 @@ void RasterizerSceneGLES2::render_shadow(RID p_light, RID p_shadow_atlas, int p_
 
 	state.scene_shader.set_conditional(SceneShaderGLES2::RENDER_DEPTH, true);
 
-	_render_render_list(render_list.elements, render_list.element_count, NULL, 0, light_transform, light_projection, NULL, 0, false, false, true, false, false);
+	_render_render_list(render_list.elements, render_list.element_count, NULL, 0, light_transform, light_projection, RID(), NULL, 0, bias, normal_bias, false, false, true, false, false);
 
 	state.scene_shader.set_conditional(SceneShaderGLES2::RENDER_DEPTH, false);
 

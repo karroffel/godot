@@ -58,6 +58,11 @@ uniform highp float time;
 
 uniform float normal_mult;
 
+#ifdef RENDER_DEPTH
+uniform float light_bias;
+uniform float light_normal_bias;
+#endif
+
 
 //
 // varyings
@@ -181,6 +186,10 @@ VERTEX_SHADER_CODE
 #ifdef RENDER_DEPTH
 
 	// TODO depth bias thingy
+	float z_ofs = light_bias;
+	z_ofs += (1.0 - abs(normal_interp.z)) * light_normal_bias;
+	
+	vertex_interp.z -= z_ofs;
 
 #endif
 
@@ -270,6 +279,14 @@ uniform float light_spot_attenuation;
 uniform float light_spot_range;
 uniform float light_spot_angle;
 
+
+// shadows
+uniform highp sampler2D light_shadow_atlas; //texunit:3
+uniform float light_has_shadow;
+
+uniform mat4 light_shadow_matrix;
+uniform vec4 light_clamp;
+
 #endif
 
 //
@@ -356,10 +373,28 @@ void light_compute(vec3 N,
 	}
 }
 
+
+
+
+// shadows
+
+float sample_shadow(highp sampler2D shadow,
+                    vec2 shadow_pixel_size,
+                    vec2 pos,
+                    float depth,
+                    vec4 clamp_rect)
+{
+	vec4 depth_value = texture2D(shadow, pos);
+	
+	return depth_value.z;
+	// return (depth_value.x + depth_value.y + depth_value.z + depth_value.w) / 4.0;
+}
+
+
 #endif
 
-void main() {
-
+void main() 
+{
 
 	highp vec3 vertex = vertex_interp;
 	vec3 albedo = vec3(0.8, 0.8, 0.8);
@@ -493,6 +528,22 @@ FRAGMENT_SHADER_CODE
 			      specular_light);
 	} else if (light_type == LIGHT_TYPE_SPOT) {
 
+		vec3 light_att = vec3(1.0);
+		
+		if (light_has_shadow > 0.5) {
+			highp vec4 splane =  (light_shadow_matrix * vec4(vertex, 1.0));
+			splane.xyz /= splane.w;
+			
+			float shadow = sample_shadow(light_shadow_atlas, vec2(0.0), splane.xy, splane.z, light_clamp);
+			
+			if (shadow > splane.z) {
+			} else {
+				light_att = vec3(0.0);
+			}
+			
+			
+		}
+
 		vec3 light_rel_vec = light_position - vertex;
 		float light_length = length(light_rel_vec);
 		float normalized_distance = light_length / light_range;
@@ -509,15 +560,15 @@ FRAGMENT_SHADER_CODE
 
 		spot_attenuation *= max(0.0, dot(normalize(normal), normalize(light_rel_vec)));
 
-		vec3 light_attenuation = vec3(spot_attenuation);
-
+		light_att *= vec3(spot_attenuation);
+		
 		light_compute(normal,
 		              normalize(light_rel_vec),
 		              eye_position,
 		              binormal,
 		              tangent,
 		              light_color.xyz * light_energy,
-		              light_attenuation,
+		              light_att,
 		              albedo,
 		              transmission,
 		              specular * light_specular,
