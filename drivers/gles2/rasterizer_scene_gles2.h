@@ -235,6 +235,15 @@ public:
 	bool _shadow_atlas_find_shadow(ShadowAtlas *shadow_atlas, int *p_in_quadrants, int p_quadrant_count, int p_current_subdiv, uint64_t p_tick, int &r_quadrant, int &r_shadow);
 	bool shadow_atlas_update_light(RID p_atlas, RID p_light_intance, float p_coverage, uint64_t p_light_version);
 
+	struct DirectionalShadow {
+		GLuint fbo;
+		GLuint depth;
+
+		int light_count;
+		int size;
+		int current_light;
+	} directional_shadow;
+
 	virtual int get_directional_light_shadow_size(RID p_light_intance);
 	virtual void set_directional_shadow_count(int p_count);
 
@@ -344,6 +353,12 @@ public:
 
 		// TODO passes and all that stuff ?
 		uint64_t last_scene_pass;
+		uint64_t last_scene_shadow_pass;
+
+		uint16_t light_index;
+		uint16_t light_directional_index;
+
+		Rect2 directional_rect;
 
 		Set<RID> shadow_atlases; // atlases where this light is registered
 	};

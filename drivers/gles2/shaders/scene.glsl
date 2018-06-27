@@ -185,7 +185,6 @@ VERTEX_SHADER_CODE
 
 #ifdef RENDER_DEPTH
 
-	// TODO depth bias thingy
 	float z_ofs = light_bias;
 	z_ofs += (1.0 - abs(normal_interp.z)) * light_normal_bias;
 	

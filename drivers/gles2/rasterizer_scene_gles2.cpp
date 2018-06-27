@@ -389,10 +389,35 @@ bool RasterizerSceneGLES2::shadow_atlas_update_light(RID p_atlas, RID p_light_in
 }
 
 void RasterizerSceneGLES2::set_directional_shadow_count(int p_count) {
+	directional_shadow.light_count = p_count;
+	directional_shadow.current_light = 0;
 }
 
 int RasterizerSceneGLES2::get_directional_light_shadow_size(RID p_light_intance) {
-	return 0;
+
+	ERR_FAIL_COND_V(directional_shadow.light_count == 0, 0);
+
+	int shadow_size;
+
+	if (directional_shadow.light_count == 1) {
+		shadow_size = directional_shadow.size;
+	} else {
+		shadow_size = directional_shadow.size / 2; //more than 4 not supported anyway
+	}
+
+	LightInstance *light_instance = light_instance_owner.getornull(p_light_intance);
+	ERR_FAIL_COND_V(!light_instance, 0);
+
+	switch (light_instance->light_ptr->directional_shadow_mode) {
+		case VS::LIGHT_DIRECTIONAL_SHADOW_ORTHOGONAL:
+			break; //none
+		case VS::LIGHT_DIRECTIONAL_SHADOW_PARALLEL_2_SPLITS:
+		case VS::LIGHT_DIRECTIONAL_SHADOW_PARALLEL_4_SPLITS:
+			shadow_size /= 2;
+			break;
+	}
+
+	return shadow_size;
 }
 //////////////////////////////////////////////////////
 
@@ -1127,6 +1152,8 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 		if (p_shadow) {
 			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_BIAS, p_shadow_bias);
 			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_NORMAL_BIAS, p_shadow_normal_bias);
+
+			print_line("light bias: " + rtos(p_shadow_bias));
 		}
 
 		if (p_env) {
@@ -1211,6 +1238,9 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 		// render lights
 
 		if (material->shader->spatial.unshaded)
+			continue;
+
+		if (p_shadow)
 			continue;
 
 		state.scene_shader.set_conditional(SceneShaderGLES2::LIGHT_PASS, true);
@@ -1549,7 +1579,7 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 	glDepthMask(GL_FALSE);
 	glDisable(GL_DEPTH_TEST);
 
-#define GLES2_SHADOW_ATLAS_DEBUG_VIEW
+	// #define GLES2_SHADOW_ATLAS_DEBUG_VIEW
 
 #ifdef GLES2_SHADOW_ATLAS_DEBUG_VIEW
 	ShadowAtlas *shadow_atlas = shadow_atlas_owner.getornull(p_shadow_atlas);
@@ -1599,7 +1629,76 @@ void RasterizerSceneGLES2::render_shadow(RID p_light, RID p_shadow_atlas, int p_
 
 	// TODO directional light
 
-	{
+	if (light->type == VS::LIGHT_DIRECTIONAL) {
+		// set pssm stuff
+
+		// TODO set this only when changed
+
+		light_instance->light_directional_index = directional_shadow.current_light;
+		light_instance->last_scene_shadow_pass = scene_pass;
+
+		directional_shadow.current_light++;
+
+		if (directional_shadow.light_count == 1) {
+			light_instance->directional_rect = Rect2(0, 0, directional_shadow.size, directional_shadow.size);
+		} else if (directional_shadow.light_count == 2) {
+			light_instance->directional_rect = Rect2(0, 0, directional_shadow.size, directional_shadow.size / 2);
+			if (light_instance->light_directional_index == 1) {
+				light_instance->directional_rect.position.x += light_instance->directional_rect.size.x;
+			}
+		} else { //3 and 4
+			light_instance->directional_rect = Rect2(0, 0, directional_shadow.size / 2, directional_shadow.size / 2);
+			if (light_instance->light_directional_index & 1) {
+				light_instance->directional_rect.position.x += light_instance->directional_rect.size.x;
+			}
+			if (light_instance->light_directional_index / 2) {
+				light_instance->directional_rect.position.y += light_instance->directional_rect.size.y;
+			}
+		}
+
+		light_projection = light_instance->shadow_transform[p_pass].camera;
+		light_transform = light_instance->shadow_transform[p_pass].transform;
+
+		x = light_instance->directional_rect.position.x;
+		y = light_instance->directional_rect.position.y;
+		width = light_instance->directional_rect.size.width;
+		height = light_instance->directional_rect.size.height;
+
+		if (light->directional_shadow_mode == VS::LIGHT_DIRECTIONAL_SHADOW_PARALLEL_4_SPLITS) {
+
+			width /= 2;
+			height /= 2;
+
+			if (p_pass == 0) {
+
+			} else if (p_pass == 1) {
+				x += width;
+			} else if (p_pass == 2) {
+				y += height;
+			} else if (p_pass == 3) {
+				x += width;
+				y += height;
+			}
+
+		} else if (light->directional_shadow_mode == VS::LIGHT_DIRECTIONAL_SHADOW_PARALLEL_2_SPLITS) {
+
+			height /= 2;
+
+			if (p_pass == 0) {
+
+			} else {
+				y += height;
+			}
+		}
+
+		float bias_mult = Math::lerp(1.0f, light_instance->shadow_transform[p_pass].bias_scale, light->param[VS::LIGHT_PARAM_SHADOW_BIAS_SPLIT_SCALE]);
+		zfar = light->param[VS::LIGHT_PARAM_RANGE];
+		bias = light->param[VS::LIGHT_PARAM_SHADOW_BIAS] * bias_mult;
+		normal_bias = light->param[VS::LIGHT_PARAM_SHADOW_NORMAL_BIAS] * bias_mult;
+
+		fbo = directional_shadow.fbo;
+		vp_height = directional_shadow.size;
+	} else {
 		ShadowAtlas *shadow_atlas = shadow_atlas_owner.getornull(p_shadow_atlas);
 		ERR_FAIL_COND(!shadow_atlas);
 		ERR_FAIL_COND(!shadow_atlas->shadow_owners.has(p_light));
@@ -1767,6 +1866,33 @@ void RasterizerSceneGLES2::initialize() {
 			shadow_cubemaps.push_back(cube);
 
 			cube_size >>= 1;
+		}
+	}
+
+	{
+		// directional shadows
+
+		directional_shadow.light_count = 0;
+		directional_shadow.size = next_power_of_2(GLOBAL_GET("rendering/quality/directional_shadow/size"));
+
+		glGenFramebuffers(1, &directional_shadow.fbo);
+		glBindFramebuffer(GL_FRAMEBUFFER, directional_shadow.fbo);
+
+		glGenTextures(1, &directional_shadow.depth);
+		glBindTexture(GL_TEXTURE_2D, directional_shadow.depth);
+
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT16, directional_shadow.size, directional_shadow.size, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, NULL);
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, directional_shadow.depth, 0);
+
+		GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+		if (status != GL_FRAMEBUFFER_COMPLETE) {
+			ERR_PRINT("Directional shadow framebuffer status invalid");
 		}
 	}
 }
