@@ -1295,6 +1295,50 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 					Color attenuation = Color(0.0, 0.0, 0.0, 0.0);
 					attenuation.a = light->light_ptr->param[VS::LIGHT_PARAM_ATTENUATION];
 					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_ATTENUATION, attenuation);
+
+					if (light->light_ptr->shadow && shadow_atlas->shadow_owners.has(light->self)) {
+
+						uint32_t key = shadow_atlas->shadow_owners[light->self];
+
+						uint32_t quadrant = (key >> ShadowAtlas::QUADRANT_SHIFT) & 0x03;
+						uint32_t shadow = key & ShadowAtlas::SHADOW_INDEX_MASK;
+
+						ERR_CONTINUE(shadow >= (uint32_t)shadow_atlas->quadrants[quadrant].shadows.size());
+
+						uint32_t atlas_size = shadow_atlas->size;
+						uint32_t quadrant_size = atlas_size >> 1;
+
+						uint32_t x = (quadrant & 1) * quadrant_size;
+						uint32_t y = (quadrant >> 1) * quadrant_size;
+
+						uint32_t shadow_size = (quadrant_size / shadow_atlas->quadrants[quadrant].subdivision);
+						x += (shadow % shadow_atlas->quadrants[quadrant].subdivision) * shadow_size;
+						y += (shadow / shadow_atlas->quadrants[quadrant].subdivision) * shadow_size;
+
+						uint32_t width = shadow_size;
+						uint32_t height = shadow_size;
+
+						if (light->light_ptr->omni_shadow_detail == VS::LIGHT_OMNI_SHADOW_DETAIL_HORIZONTAL) {
+							height /= 2;
+						} else {
+							width /= 2;
+						}
+
+						Transform proj = (p_view_transform.inverse() * light->transform).inverse();
+
+						Color light_clamp;
+						light_clamp[0] = float(x) / atlas_size;
+						light_clamp[1] = float(y) / atlas_size;
+						light_clamp[2] = float(width) / atlas_size;
+						light_clamp[3] = float(height) / atlas_size;
+
+						state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_SHADOW_MATRIX, proj);
+						state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_CLAMP, light_clamp);
+
+						state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_HAS_SHADOW, 1.0);
+					} else {
+						state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_HAS_SHADOW, 0.0);
+					}
 				} break;
 
 				case VS::LIGHT_SPOT: {
@@ -1579,7 +1623,7 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 	glDepthMask(GL_FALSE);
 	glDisable(GL_DEPTH_TEST);
 
-	// #define GLES2_SHADOW_ATLAS_DEBUG_VIEW
+#define GLES2_SHADOW_ATLAS_DEBUG_VIEW
 
 #ifdef GLES2_SHADOW_ATLAS_DEBUG_VIEW
 	ShadowAtlas *shadow_atlas = shadow_atlas_owner.getornull(p_shadow_atlas);
@@ -1725,7 +1769,30 @@ void RasterizerSceneGLES2::render_shadow(RID p_light, RID p_shadow_atlas, int p_
 		width = shadow_size;
 		height = shadow_size;
 
-		if (light->type == VS::LIGHT_SPOT) {
+		if (light->type == VS::LIGHT_OMNI) {
+			// cubemap only
+			if (light->omni_shadow_mode == VS::LIGHT_OMNI_SHADOW_CUBE) {
+				int cubemap_index = shadow_cubemaps.size() - 1;
+
+				// find an appropriate cubemap to render to
+				for (int i = shadow_cubemaps.size() - 1; i >= 0; i--) {
+					if (shadow_cubemaps[i].size > shadow_size * 2) {
+						break;
+					}
+
+					cubemap_index = i;
+				}
+
+				fbo = shadow_cubemaps[cubemap_index].fbo[p_pass];
+				light_projection = light_instance->shadow_transform[0].camera;
+				light_transform = light_instance->shadow_transform[0].transform;
+
+				custom_vp_size = shadow_cubemaps[cubemap_index].size;
+				zfar = light->param[VS::LIGHT_PARAM_RANGE];
+
+				current_cubemap = cubemap_index;
+			}
+		} else {
 			light_projection = light_instance->shadow_transform[0].camera;
 			light_transform = light_instance->shadow_transform[0].transform;
 
@@ -1770,24 +1837,54 @@ void RasterizerSceneGLES2::render_shadow(RID p_light, RID p_shadow_atlas, int p_
 
 	state.scene_shader.set_conditional(SceneShaderGLES2::RENDER_DEPTH, false);
 
-	ShadowAtlas *shadow_atlas = shadow_atlas_owner.getornull(p_shadow_atlas);
+	// convert cubemap to dual paraboloid if needed
+	if (light->type == VS::LIGHT_OMNI && light->omni_shadow_mode == VS::LIGHT_OMNI_SHADOW_CUBE && p_pass == 5) {
+		ShadowAtlas *shadow_atlas = shadow_atlas_owner.getornull(p_shadow_atlas);
 
-	storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_COPY_SECTION, false);
-	storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUSTOM_ALPHA, false);
-	storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_PANORAMA, false);
-	storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUBEMAP, false);
-	storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_MULTIPLIER, false);
+		glBindFramebuffer(GL_FRAMEBUFFER, shadow_atlas->fbo);
+		state.cube_to_dp_shader.bind();
 
-	storage->shaders.copy.bind();
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, shadow_cubemaps[current_cubemap].cubemap);
 
-	glBindFramebuffer(GL_FRAMEBUFFER, storage->frame.current_rt->fbo);
+		glDisable(GL_CULL_FACE);
 
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, shadow_atlas->depth);
+		for (int i = 0; i < 2; i++) {
+			state.cube_to_dp_shader.set_uniform(CubeToDpShaderGLES2::Z_FLIP, i == 1);
+			state.cube_to_dp_shader.set_uniform(CubeToDpShaderGLES2::Z_NEAR, light_projection.get_z_near());
+			state.cube_to_dp_shader.set_uniform(CubeToDpShaderGLES2::Z_FAR, light_projection.get_z_far());
+			state.cube_to_dp_shader.set_uniform(CubeToDpShaderGLES2::BIAS, light->param[VS::LIGHT_PARAM_SHADOW_BIAS]);
+
+			uint32_t local_width = width;
+			uint32_t local_height = height;
+			uint32_t local_x = x;
+			uint32_t local_y = y;
+
+			if (light->omni_shadow_detail == VS::LIGHT_OMNI_SHADOW_DETAIL_HORIZONTAL) {
+				local_height /= 2;
+				local_y += i * local_height;
+			} else {
+				local_width /= 2;
+				local_x += i * local_width;
+			}
+
+			glViewport(local_x, local_y, local_width, local_height);
+			glScissor(local_x, local_y, local_width, local_height);
+
+			glEnable(GL_SCISSOR_TEST);
+
+			glClearDepth(1.0f);
+
+			glClear(GL_DEPTH_BUFFER_BIT);
+			glDisable(GL_SCISSOR_TEST);
+
+			glDisable(GL_BLEND);
+
+			storage->_copy_screen();
+		}
+	}
 
 	glViewport(0, 0, storage->frame.current_rt->width, storage->frame.current_rt->height);
-
-	storage->_copy_screen();
 }
 
 void RasterizerSceneGLES2::set_scene_pass(uint64_t p_pass) {
@@ -1803,6 +1900,7 @@ void RasterizerSceneGLES2::set_debug_draw_mode(VS::ViewportDebugDraw p_debug_dra
 
 void RasterizerSceneGLES2::initialize() {
 	state.scene_shader.init();
+	state.cube_to_dp_shader.init();
 
 	render_list.init();
 

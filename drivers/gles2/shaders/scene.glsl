@@ -481,6 +481,36 @@ FRAGMENT_SHADER_CODE
 
 		vec3 attenuation = vec3(omni_attenuation);
 
+		if (light_has_shadow > 0.5) {
+			highp vec3 splane =  (light_shadow_matrix * vec4(vertex, 1.0)).xyz;
+			float shadow_len = length(splane);
+
+			splane = normalize(splane);
+
+			vec4 clamp_rect = light_clamp;
+
+			if (splane.z >= 0.0) {
+				splane.z += 1.0;
+
+				clamp_rect.y += clamp_rect.w;
+			} else {
+				splane.z = 1.0 - splane.z;
+			}
+
+			splane.xy /= splane.z;
+			splane.xy = splane.xy * 0.5 + 0.5;
+			splane.z = shadow_len / light_range;
+
+			splane.xy = clamp_rect.xy + splane.xy * clamp_rect.zw;
+
+			float shadow = sample_shadow(light_shadow_atlas, vec2(0.0), splane.xy, splane.z, clamp_rect);
+
+			if (shadow > splane.z) {
+			} else {
+				attenuation = vec3(0.0);
+			}
+		}
+
 		light_compute(normal,
 		              normalize(light_vec),
 		              eye_position,

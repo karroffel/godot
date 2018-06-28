@@ -33,10 +33,10 @@
 /* Must come before shaders or the Windows build fails... */
 #include "rasterizer_storage_gles2.h"
 
+#include "shaders/cube_to_dp.glsl.gen.h"
 #include "shaders/scene.glsl.gen.h"
 /*
 
-#include "drivers/gles3/shaders/cube_to_dp.glsl.gen.h"
 #include "drivers/gles3/shaders/effect_blur.glsl.gen.h"
 #include "drivers/gles3/shaders/exposure.glsl.gen.h"
 #include "drivers/gles3/shaders/resolve.glsl.gen.h"
@@ -70,10 +70,10 @@ public:
 		GLuint current_main_tex;
 
 		SceneShaderGLES2 scene_shader;
+		CubeToDpShaderGLES2 cube_to_dp_shader;
 
 		GLuint sky_verts;
 
-		// CubeToDpShaderGLES3 cube_to_dp_shader;
 		// ResolveShaderGLES3 resolve_shader;
 		// ScreenSpaceReflectionShaderGLES3 ssr_shader;
 		// EffectBlurShaderGLES3 effect_blur_shader;
