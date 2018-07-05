@@ -412,6 +412,12 @@ void main()
 	float alpha = 1.0;
 	float side = 1.0;
 
+#if defined(ENABLE_AO)
+	float ao = 1.0;
+	float ao_light_affect = 0.0;
+#endif
+
+
 #if defined(ENABLE_TANGENT_INTERP) || defined(ENABLE_NORMALMAP)
 	vec3 binormal = normalize(binormal_interp) * side;
 	vec3 tangent = normalize(tangent_interp) * side;
@@ -643,6 +649,13 @@ FRAGMENT_SHADER_CODE
 	specular_light += env_reflection_light;
 	
 	ambient_light *= albedo;
+
+#if defined(ENABLE_AO)
+	ambient_light *= ao;
+	ao_light_affect = mix(1.0, ao, ao_light_affect);
+	specular_light *= ao_light_affect;
+	diffuse_light *= ao_light_affect;
+#endif
 	
 	diffuse_light *= 1.0 - metallic;
 	ambient_light *= 1.0 - metallic;

@@ -1623,7 +1623,7 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 	glDepthMask(GL_FALSE);
 	glDisable(GL_DEPTH_TEST);
 
-#define GLES2_SHADOW_ATLAS_DEBUG_VIEW
+	// #define GLES2_SHADOW_ATLAS_DEBUG_VIEW
 
 #ifdef GLES2_SHADOW_ATLAS_DEBUG_VIEW
 	ShadowAtlas *shadow_atlas = shadow_atlas_owner.getornull(p_shadow_atlas);
