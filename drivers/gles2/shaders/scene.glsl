@@ -356,8 +356,9 @@ void light_compute(vec3 N,
 		float diffuse_brdf_NL;
 
 		diffuse_brdf_NL = max(0.0,(NdotL + roughness) / ((1.0 + roughness) * (1.0 + roughness)));
+		// diffuse_brdf_NL = cNdotL * (1.0 / M_PI);
 
-		diffuse_light += light_color * diffuse_color * diffuse_brdf_NL * attenuation * roughness;
+		diffuse_light += light_color * diffuse_color * diffuse_brdf_NL * attenuation;
 	}
 
 	{
@@ -425,7 +426,7 @@ void main()
 	vec3 binormal = vec3(0.0);
 	vec3 tangent = vec3(0.0);
 #endif
-	vec3 normal = normalize(normal_interp);
+	vec3 normal = normalize(normal_interp) * side;
 
 #if defined(ENABLE_NORMALMAP)
 	vec3 normalmap = vec3(0.5);
@@ -454,6 +455,8 @@ FRAGMENT_SHADER_CODE
 
 	normal = normalize(mix(normal_interp, tangent * normalmap.x + binormal * normalmap.y + normal * normalmap.z, normaldepth)) * side;
 #endif
+
+	normal = normalize(normal);
 
 	vec3 N = normal;
 	
@@ -593,8 +596,6 @@ FRAGMENT_SHADER_CODE
 
 		spot_attenuation *= 1.0 - pow(spot_rim, light_spot_attenuation);
 
-		spot_attenuation *= max(0.0, dot(normalize(normal), normalize(light_rel_vec)));
-
 		light_att *= vec3(spot_attenuation);
 		
 		light_compute(normal,
@@ -676,6 +677,7 @@ FRAGMENT_SHADER_CODE
 	}
 	
 	gl_FragColor = vec4(ambient_light + diffuse_light + specular_light, alpha);
+	// gl_FragColor = vec4(normal, 1.0);
 #else
 	gl_FragColor = vec4(albedo, alpha);
 #endif
