@@ -45,7 +45,7 @@ attribute highp vec4 bone_transform_row_2; // attrib:11
 
 #else
 
-attribute ivec4 bone_ids; // attrib:6
+attribute vec4 bone_ids; // attrib:6
 attribute highp vec4 bone_weights; // attrib:7
 
 uniform highp sampler2D bone_transforms; // texunit:4
@@ -159,9 +159,9 @@ void main() {
 	{
 		
 		for (int i = 0; i < 4; i++) {
-			ivec2 tex_ofs = ivec2(bone_ids[i] * 3, 0);
+			ivec2 tex_ofs = ivec2(int(bone_ids[i]) * 3, 0);
 
-			mat4 b = mat4(texel2DFetch(bone_transforms, skeleton_texture_size, tex_ofs + ivec2(0, 0)),
+			highp mat4 b = mat4(texel2DFetch(bone_transforms, skeleton_texture_size, tex_ofs + ivec2(0, 0)),
 			              texel2DFetch(bone_transforms, skeleton_texture_size, tex_ofs + ivec2(1, 0)),
 			              texel2DFetch(bone_transforms, skeleton_texture_size, tex_ofs + ivec2(2, 0)),
 			              vec4(0.0, 0.0, 0.0, 1.0));
