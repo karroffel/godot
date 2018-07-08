@@ -774,11 +774,14 @@ public:
 
 		Vector<float> bone_data;
 
+		GLuint tex_id;
+
 		SelfList<Skeleton> update_list;
 		Set<RasterizerScene::InstanceBase *> instances;
 
 		Skeleton() :
 				update_list(this) {
+			tex_id = 0;
 			size = 0;
 			use_2d = false;
 		}

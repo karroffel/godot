@@ -2264,7 +2264,21 @@ void RasterizerStorageGLES2::skeleton_allocate(RID p_skeleton, int p_bones, bool
 	skeleton->use_2d = p_2d_skeleton;
 
 	// TODO use float texture for vertex shader
+	if (config.float_texture_supported) {
+		glGenTextures(1, &skeleton->tex_id);
 
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, skeleton->tex_id);
+
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, p_bones * 3, 1, 0, GL_RGB, GL_FLOAT, NULL);
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
 	if (skeleton->use_2d) {
 		skeleton->bone_data.resize(p_bones * 4 * 2);
 	} else {
@@ -2409,6 +2423,27 @@ void RasterizerStorageGLES2::_update_skeleton_transform_buffer(const PoolVector<
 }
 
 void RasterizerStorageGLES2::update_dirty_skeletons() {
+
+	if (!config.float_texture_supported)
+		return;
+
+	glActiveTexture(GL_TEXTURE0);
+
+	while (skeleton_update_list.first()) {
+		Skeleton *skeleton = skeleton_update_list.first()->self();
+
+		if (skeleton->size) {
+			glBindTexture(GL_TEXTURE_2D, skeleton->tex_id);
+
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, skeleton->size * 3, 1, GL_RGBA, GL_FLOAT, skeleton->bone_data.ptr());
+		}
+
+		for (Set<RasterizerScene::InstanceBase *>::Element *E = skeleton->instances.front(); E; E = E->next()) {
+			E->get()->base_changed();
+		}
+
+		skeleton_update_list.remove(skeleton_update_list.first());
+	}
 }
 
 /* Light API */
@@ -3426,6 +3461,7 @@ void RasterizerStorageGLES2::_copy_screen() {
 void RasterizerStorageGLES2::update_dirty_resources() {
 	update_dirty_shaders();
 	update_dirty_materials();
+	update_dirty_skeletons();
 }
 
 RasterizerStorageGLES2::RasterizerStorageGLES2() {

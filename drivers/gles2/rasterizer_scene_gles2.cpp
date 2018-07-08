@@ -627,13 +627,11 @@ void RasterizerSceneGLES2::light_instance_set_shadow_transform(RID p_light_insta
 
 	ERR_FAIL_INDEX(p_pass, 4);
 
-	light_instance->shadow_transform[p_pass] = {
-		p_projection,
-		p_transform,
-		p_far,
-		p_split,
-		p_bias_scale
-	};
+	light_instance->shadow_transform[p_pass].camera = p_projection;
+	light_instance->shadow_transform[p_pass].transform = p_transform;
+	light_instance->shadow_transform[p_pass].farplane = p_far;
+	light_instance->shadow_transform[p_pass].split = p_split;
+	light_instance->shadow_transform[p_pass].bias_scale = p_bias_scale;
 }
 
 void RasterizerSceneGLES2::light_instance_mark_visible(RID p_light_instance) {
@@ -810,7 +808,7 @@ static const GLenum gl_primitive[] = {
 	GL_TRIANGLE_FAN
 };
 
-void RasterizerSceneGLES2::_setup_material(RasterizerStorageGLES2::Material *p_material, bool p_use_radiance_map, bool p_reverse_cull, bool p_shadow_atlas) {
+void RasterizerSceneGLES2::_setup_material(RasterizerStorageGLES2::Material *p_material, bool p_use_radiance_map, bool p_reverse_cull, bool p_shadow_atlas, bool p_skeleton_tex, Size2i p_skeleton_tex_size) {
 
 	// material parameters
 
@@ -857,6 +855,12 @@ void RasterizerSceneGLES2::_setup_material(RasterizerStorageGLES2::Material *p_m
 		num_default_tex = MIN(num_default_tex, 3);
 	}
 
+	if (p_skeleton_tex) {
+		num_default_tex = MIN(num_default_tex, 4);
+
+		state.scene_shader.set_uniform(SceneShaderGLES2::SKELETON_TEXTURE_SIZE, p_skeleton_tex_size);
+	}
+
 	for (int i = 0; i < tc; i++) {
 
 		glActiveTexture(GL_TEXTURE0 + num_default_tex + i);
@@ -894,6 +898,17 @@ void RasterizerSceneGLES2::_setup_material(RasterizerStorageGLES2::Material *p_m
 void RasterizerSceneGLES2::_setup_geometry(RenderList::Element *p_element, RasterizerStorageGLES2::Skeleton *p_skeleton) {
 
 	state.scene_shader.set_conditional(SceneShaderGLES2::USE_SKELETON, p_skeleton != NULL);
+	// state.scene_shader.set_conditional(SceneShaderGLES2::USE_SKELETON_SOFTWARE, !storage->config.float_texture_supported);
+	state.scene_shader.set_conditional(SceneShaderGLES2::USE_SKELETON_SOFTWARE, true);
+
+	if (storage->config.float_texture_supported) {
+		if (p_skeleton) {
+			glActiveTexture(GL_TEXTURE4);
+			glBindTexture(GL_TEXTURE_2D, p_skeleton->tex_id);
+		}
+
+		// return;
+	}
 
 	if (p_skeleton) {
 		ERR_FAIL_COND(p_skeleton->use_2d);
@@ -1105,10 +1120,6 @@ void RasterizerSceneGLES2::_render_geometry(RenderList::Element *p_element) {
 
 void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements, int p_element_count, const RID *p_light_cull_result, int p_light_cull_count, const Transform &p_view_transform, const CameraMatrix &p_projection, RID p_shadow_atlas, Environment *p_env, GLuint p_base_env, float p_shadow_bias, float p_shadow_normal_bias, bool p_reverse_cull, bool p_alpha_pass, bool p_shadow, bool p_directional_add, bool p_directional_shadows) {
 
-	if (p_shadow) {
-		print_line("Render a shadow!");
-	}
-
 	ShadowAtlas *shadow_atlas = shadow_atlas_owner.getornull(p_shadow_atlas);
 
 	Vector2 screen_pixel_size;
@@ -1143,7 +1154,7 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 
 		_setup_geometry(e, skeleton);
 
-		_setup_material(material, use_radiance_map, p_reverse_cull);
+		_setup_material(material, use_radiance_map, p_reverse_cull, false, skeleton ? (skeleton->tex_id != 0) : 0, Size2i(skeleton ? skeleton->size * 3 : 0, 0));
 
 		if (use_radiance_map) {
 			state.scene_shader.set_uniform(SceneShaderGLES2::RADIANCE_INVERSE_XFORM, p_view_transform);
@@ -1152,8 +1163,6 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 		if (p_shadow) {
 			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_BIAS, p_shadow_bias);
 			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_NORMAL_BIAS, p_shadow_normal_bias);
-
-			print_line("light bias: " + rtos(p_shadow_bias));
 		}
 
 		if (p_env) {
@@ -1212,7 +1221,6 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 				} break;
 			}
 		} else {
-
 			// no blend mode given - assume mix
 			glBlendEquation(GL_FUNC_ADD);
 			if (storage->frame.current_rt && storage->frame.current_rt->flags[RasterizerStorage::RENDER_TARGET_TRANSPARENT]) {
@@ -1251,9 +1259,8 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 
 		{
-
 			bool has_shadow_atlas = shadow_atlas != NULL;
-			_setup_material(material, false, p_reverse_cull, has_shadow_atlas);
+			_setup_material(material, false, p_reverse_cull, has_shadow_atlas, skeleton ? (skeleton->tex_id != 0) : 0, Size2i(skeleton ? skeleton->size * 3 : 0, 0));
 
 			if (has_shadow_atlas) {
 				glActiveTexture(GL_TEXTURE3);
@@ -1273,7 +1280,6 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 		}
 
 		for (int j = 0; j < e->instance->light_instances.size(); j++) {
-
 			RID light_rid = e->instance->light_instances[j];
 			LightInstance *light = light_instance_owner.get(light_rid);
 

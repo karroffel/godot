@@ -36,9 +36,23 @@ attribute vec2 uv2_attrib; // attrib:5
 #endif
 
 #ifdef USE_SKELETON
+
+#ifdef USE_SKELETON_SOFTWARE
+
 attribute highp vec4 bone_transform_row_0; // attrib:9
 attribute highp vec4 bone_transform_row_1; // attrib:10
 attribute highp vec4 bone_transform_row_2; // attrib:11
+
+#else
+
+attribute ivec4 bone_ids; // attrib:6
+attribute highp vec4 bone_weights; // attrib:7
+
+uniform highp sampler2D bone_transforms; // texunit:4
+uniform ivec2 skeleton_texture_size;
+
+#endif
+
 #endif
 
 
@@ -129,11 +143,34 @@ void main() {
 #endif
 
 #ifdef USE_SKELETON
+
 	highp mat4 bone_transform = mat4(1.0);
+
+#ifdef USE_SKELETON_SOFTWARE
+	// passing the transform as attributes
+
 	bone_transform[0] = vec4(bone_transform_row_0.x, bone_transform_row_1.x, bone_transform_row_2.x, 0.0);
 	bone_transform[1] = vec4(bone_transform_row_0.y, bone_transform_row_1.y, bone_transform_row_2.y, 0.0);
 	bone_transform[2] = vec4(bone_transform_row_0.z, bone_transform_row_1.z, bone_transform_row_2.z, 0.0);
 	bone_transform[3] = vec4(bone_transform_row_0.w, bone_transform_row_1.w, bone_transform_row_2.w, 1.0);
+
+#else
+	// look up transform from the "pose texture"
+	{
+		
+		for (int i = 0; i < 4; i++) {
+			ivec2 tex_ofs = ivec2(bone_ids[i] * 3, 0);
+
+			mat4 b = mat4(texel2DFetch(bone_transforms, skeleton_texture_size, tex_ofs + ivec2(0, 0)),
+			              texel2DFetch(bone_transforms, skeleton_texture_size, tex_ofs + ivec2(1, 0)),
+			              texel2DFetch(bone_transforms, skeleton_texture_size, tex_ofs + ivec2(2, 0)),
+			              vec4(0.0, 0.0, 0.0, 1.0));
+
+			bone_transform += transpose(b) * bone_weights[i];
+		}
+	}
+
+#endif
 
 	world_matrix = bone_transform * world_matrix;
 #endif
@@ -287,6 +324,7 @@ uniform mat4 light_shadow_matrix;
 uniform vec4 light_clamp;
 
 #endif
+
 
 //
 // varyings
@@ -675,9 +713,12 @@ FRAGMENT_SHADER_CODE
 		vec3 specular_color = metallic_to_specular_color(metallic, specular, albedo);
 		specular_light *= AB.x * specular_color + AB.y;
 	}
-	
+
+
 	gl_FragColor = vec4(ambient_light + diffuse_light + specular_light, alpha);
 	// gl_FragColor = vec4(normal, 1.0);
+
+
 #else
 	gl_FragColor = vec4(albedo, alpha);
 #endif
