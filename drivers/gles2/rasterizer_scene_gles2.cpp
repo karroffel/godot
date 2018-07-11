@@ -917,8 +917,8 @@ void RasterizerSceneGLES2::_setup_material(RasterizerStorageGLES2::Material *p_m
 void RasterizerSceneGLES2::_setup_geometry(RenderList::Element *p_element, RasterizerStorageGLES2::Skeleton *p_skeleton) {
 
 	state.scene_shader.set_conditional(SceneShaderGLES2::USE_SKELETON, p_skeleton != NULL);
-	state.scene_shader.set_conditional(SceneShaderGLES2::USE_SKELETON_SOFTWARE, !storage->config.float_texture_supported);
-	// state.scene_shader.set_conditional(SceneShaderGLES2::USE_SKELETON_SOFTWARE, true);
+	// state.scene_shader.set_conditional(SceneShaderGLES2::USE_SKELETON_SOFTWARE, !storage->config.float_texture_supported);
+	state.scene_shader.set_conditional(SceneShaderGLES2::USE_SKELETON_SOFTWARE, true);
 
 	switch (p_element->instance->base_type) {
 
@@ -948,7 +948,7 @@ void RasterizerSceneGLES2::_setup_geometry(RenderList::Element *p_element, Raste
 		} break;
 	}
 
-	if (storage->config.float_texture_supported) {
+	if (false && storage->config.float_texture_supported) {
 		if (p_skeleton) {
 			glActiveTexture(GL_TEXTURE4);
 			glBindTexture(GL_TEXTURE_2D, p_skeleton->tex_id);
