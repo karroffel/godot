@@ -717,7 +717,53 @@ public:
 	/* MULTIMESH API */
 
 	struct MultiMesh : public GeometryOwner {
+
+		RID mesh;
+		int size;
+
+		VS::MultimeshTransformFormat transform_format;
+		VS::MultimeshColorFormat color_format;
+		VS::MultimeshCustomDataFormat custom_data_format;
+
+		Vector<float> data;
+
+		AABB aabb;
+
+		SelfList<MultiMesh> update_list;
+		SelfList<MultiMesh> mesh_list;
+
+		int visible_instances;
+
+		int xform_floats;
+		int color_floats;
+		int custom_data_floats;
+
+		bool dirty_aabb;
+		bool dirty_data;
+
+		MultiMesh() :
+				update_list(this),
+				mesh_list(this) {
+			dirty_aabb = true;
+			dirty_data = true;
+
+			xform_floats = 0;
+			color_floats = 0;
+			custom_data_floats = 0;
+
+			visible_instances = -1;
+
+			size = 0;
+
+			transform_format = VS::MULTIMESH_TRANSFORM_2D;
+			color_format = VS::MULTIMESH_COLOR_NONE;
+			custom_data_format = VS::MULTIMESH_CUSTOM_DATA_NONE;
+		}
 	};
+
+	mutable RID_Owner<MultiMesh> multimesh_owner;
+
+	SelfList<MultiMesh>::List multimesh_update_list;
 
 	virtual RID multimesh_create();
 
@@ -728,7 +774,7 @@ public:
 	virtual void multimesh_instance_set_transform(RID p_multimesh, int p_index, const Transform &p_transform);
 	virtual void multimesh_instance_set_transform_2d(RID p_multimesh, int p_index, const Transform2D &p_transform);
 	virtual void multimesh_instance_set_color(RID p_multimesh, int p_index, const Color &p_color);
-	virtual void multimesh_instance_set_custom_data(RID p_multimesh, int p_index, const Color &p_color);
+	virtual void multimesh_instance_set_custom_data(RID p_multimesh, int p_index, const Color &p_custom_data);
 
 	virtual RID multimesh_get_mesh(RID p_multimesh) const;
 
