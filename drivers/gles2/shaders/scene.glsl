@@ -55,6 +55,17 @@ uniform ivec2 skeleton_texture_size;
 
 #endif
 
+#ifdef USE_INSTANCING
+
+attribute highp vec4 instance_xform_row_0; // attrib:12
+attribute highp vec4 instance_xform_row_1; // attrib:13
+attribute highp vec4 instance_xform_row_2; // attrib:14
+
+attribute highp vec4 instance_color; // attrib:15
+attribute highp vec4 instance_custom_data; // attrib:8
+
+#endif
+
 
 
 //
@@ -111,6 +122,16 @@ void main() {
 
 	mat4 world_matrix = world_transform;
 
+#ifdef USE_INSTANCING
+	{
+		highp mat4 m = mat4(instance_xform_row_0,
+		                    instance_xform_row_1,
+		                    instance_xform_row_2,
+		                    vec4(0.0, 0.0, 0.0, 1.0));
+		world_matrix = world_matrix * transpose(m);
+	}
+#endif
+
 	vec3 normal = normal_attrib * normal_mult;
 
 #if defined(ENABLE_TANGENT_INTERP) || defined(ENABLE_NORMALMAP)
@@ -122,6 +143,9 @@ void main() {
 
 #ifdef ENABLE_COLOR_INTERP
 	color_interp = color_attrib;
+#ifdef USE_INSTANCING
+	color_interp *= instance_color;
+#endif
 #endif
 
 #ifdef ENABLE_UV_INTERP
@@ -176,8 +200,12 @@ void main() {
 #endif
 
 
-	// FIXME: what to do about instancing?
+#ifdef USE_INSTANCING
+	vec4 instance_custom = instance_custom_data;
+#else
 	vec4 instance_custom = vec4(0.0);
+
+#endif
 
 
 	mat4 modelview = camera_matrix * world_matrix;
