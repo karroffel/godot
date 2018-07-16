@@ -1020,10 +1020,10 @@ void RasterizerSceneGLES2::_setup_geometry(RenderList::Element *p_element, Raste
 						} else {
 							// read as half
 							const uint16_t *weight_ptr = (const uint16_t *)(vertex_data + bone_weight_offset + (i * bone_weight_stride));
-							bone_weight[0] = (weight_ptr[0] / (float)UINT16_MAX);
-							bone_weight[1] = (weight_ptr[1] / (float)UINT16_MAX);
-							bone_weight[2] = (weight_ptr[2] / (float)UINT16_MAX);
-							bone_weight[3] = (weight_ptr[3] / (float)UINT16_MAX);
+							bone_weight[0] = (weight_ptr[0] / (float)0xFFFF);
+							bone_weight[1] = (weight_ptr[1] / (float)0xFFFF);
+							bone_weight[2] = (weight_ptr[2] / (float)0xFFFF);
+							bone_weight[3] = (weight_ptr[3] / (float)0xFFFF);
 						}
 
 						size_t offset = i * 12;
