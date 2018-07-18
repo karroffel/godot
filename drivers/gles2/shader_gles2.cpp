@@ -143,7 +143,10 @@ bool ShaderGLES2::bind() {
 	for (int i = 0; i < count; i++) {
 		GLchar uniform_name[1024];
 		int len = 0;
-		glGetActiveUniform(version->id, i, 1024, &len, NULL, NULL, uniform_name);
+		GLint size = 0;
+		GLenum type;
+
+		glGetActiveUniform(version->id, i, 1024, &len, &size, &type, uniform_name);
 
 		uniform_name[len] = '\0';
 		String name = String((const char *)uniform_name);
