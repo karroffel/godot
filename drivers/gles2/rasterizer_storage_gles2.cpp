@@ -3723,7 +3723,172 @@ VS::InstanceType RasterizerStorageGLES2::get_base_type(RID p_rid) const {
 }
 
 bool RasterizerStorageGLES2::free(RID p_rid) {
-	return false;
+
+	if (render_target_owner.owns(p_rid)) {
+
+		RenderTarget *rt = render_target_owner.getornull(p_rid);
+		_render_target_clear(rt);
+
+		Texture *t = texture_owner.get(rt->texture);
+		texture_owner.free(rt->texture);
+		memdelete(t);
+		render_target_owner.free(p_rid);
+		memdelete(rt);
+
+		return true;
+	} else if (texture_owner.owns(p_rid)) {
+
+		Texture *t = texture_owner.get(p_rid);
+		// can't free a render target texture
+		ERR_FAIL_COND_V(t->render_target, true);
+
+		info.texture_mem -= t->total_data_size;
+		texture_owner.free(p_rid);
+		memdelete(t);
+
+		return true;
+	} else if (sky_owner.owns(p_rid)) {
+
+		Sky *sky = sky_owner.get(p_rid);
+		sky_set_texture(p_rid, RID(), 256);
+		sky_owner.free(p_rid);
+		memdelete(sky);
+
+		return true;
+	} else if (shader_owner.owns(p_rid)) {
+
+		Shader *shader = shader_owner.get(p_rid);
+
+		if (shader->shader) {
+			shader->shader->free_custom_shader(shader->custom_code_id);
+		}
+
+		if (shader->dirty_list.in_list()) {
+			_shader_dirty_list.remove(&shader->dirty_list);
+		}
+
+		while (shader->materials.first()) {
+			Material *m = shader->materials.first()->self();
+
+			m->shader = NULL;
+			_material_make_dirty(m);
+
+			shader->materials.remove(shader->materials.first());
+		}
+
+		shader_owner.free(p_rid);
+		memdelete(shader);
+
+		return true;
+	} else if (material_owner.owns(p_rid)) {
+
+		Material *m = material_owner.get(p_rid);
+
+		if (m->shader) {
+			m->shader->materials.remove(&m->list);
+		}
+
+		for (Map<Geometry *, int>::Element *E = m->geometry_owners.front(); E; E = E->next()) {
+			Geometry *g = E->key();
+			g->material = RID();
+		}
+
+		for (Map<RasterizerScene::InstanceBase *, int>::Element *E = m->instance_owners.front(); E; E = E->next()) {
+
+			RasterizerScene::InstanceBase *ins = E->key();
+
+			if (ins->material_override == p_rid) {
+				ins->material_override = RID();
+			}
+
+			for (int i = 0; i < ins->materials.size(); i++) {
+				if (ins->materials[i] == p_rid) {
+					ins->materials[i] = RID();
+				}
+			}
+		}
+
+		material_owner.free(p_rid);
+		memdelete(m);
+
+		return true;
+	} else if (skeleton_owner.owns(p_rid)) {
+
+		Skeleton *s = skeleton_owner.get(p_rid);
+
+		if (s->update_list.in_list()) {
+			skeleton_update_list.remove(&s->update_list);
+		}
+
+		for (Set<RasterizerScene::InstanceBase *>::Element *E = s->instances.front(); E; E = E->next()) {
+			E->get()->skeleton = RID();
+		}
+
+		skeleton_allocate(p_rid, 0, false);
+
+		if (s->tex_id) {
+			glDeleteTextures(1, &s->tex_id);
+		}
+
+		skeleton_owner.free(p_rid);
+		memdelete(s);
+
+		return true;
+	} else if (mesh_owner.owns(p_rid)) {
+
+		Mesh *mesh = mesh_owner.get(p_rid);
+
+		mesh->instance_remove_deps();
+		mesh_clear(p_rid);
+
+		while (mesh->multimeshes.first()) {
+			MultiMesh *multimesh = mesh->multimeshes.first()->self();
+			multimesh->mesh = RID();
+			multimesh->dirty_aabb = true;
+
+			mesh->multimeshes.remove(mesh->multimeshes.first());
+
+			if (!multimesh->update_list.in_list()) {
+				multimesh_update_list.add(&multimesh->update_list);
+			}
+		}
+
+		mesh_owner.free(p_rid);
+		memdelete(mesh);
+
+		return true;
+	} else if (multimesh_owner.owns(p_rid)) {
+
+		MultiMesh *multimesh = multimesh_owner.get(p_rid);
+		multimesh->instance_remove_deps();
+
+		if (multimesh->mesh.is_valid()) {
+			Mesh *mesh = mesh_owner.getornull(multimesh->mesh);
+			if (mesh) {
+				mesh->multimeshes.remove(&multimesh->mesh_list);
+			}
+		}
+
+		multimesh_allocate(p_rid, 0, VS::MULTIMESH_TRANSFORM_3D, VS::MULTIMESH_COLOR_NONE);
+
+		update_dirty_multimeshes();
+
+		multimesh_owner.free(p_rid);
+		memdelete(multimesh);
+
+		return true;
+	} else if (light_owner.owns(p_rid)) {
+
+		Light *light = light_owner.get(p_rid);
+		light->instance_remove_deps();
+
+		light_owner.free(p_rid);
+		memdelete(light);
+
+		return true;
+	} else {
+		return false;
+	}
 }
 
 bool RasterizerStorageGLES2::has_os_feature(const String &p_feature) const {

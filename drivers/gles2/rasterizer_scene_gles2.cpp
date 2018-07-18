@@ -1600,6 +1600,37 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 
 			switch (light_ptr->type) {
 				case VS::LIGHT_DIRECTIONAL: {
+
+					switch (light_ptr->directional_shadow_mode) {
+						case VS::LIGHT_DIRECTIONAL_SHADOW_ORTHOGONAL: {
+						} break;
+						case VS::LIGHT_DIRECTIONAL_SHADOW_PARALLEL_2_SPLITS: {
+							state.scene_shader.set_conditional(SceneShaderGLES2::LIGHT_USE_PSSM2, true);
+							state.scene_shader.set_conditional(SceneShaderGLES2::LIGHT_USE_PSSM_BLEND, light_ptr->directional_blend_splits);
+						} break;
+
+						case VS::LIGHT_DIRECTIONAL_SHADOW_PARALLEL_4_SPLITS: {
+							state.scene_shader.set_conditional(SceneShaderGLES2::LIGHT_USE_PSSM4, true);
+							state.scene_shader.set_conditional(SceneShaderGLES2::LIGHT_USE_PSSM_BLEND, light_ptr->directional_blend_splits);
+						} break;
+						default:
+							break;
+					}
+
+					{
+						_setup_material(material, false, p_reverse_cull, false, skeleton ? (skeleton->tex_id != 0) : 0, Size2i(skeleton ? skeleton->size * 3 : 0, 0));
+
+						state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_MATRIX, p_view_transform.inverse());
+						state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_INVERSE_MATRIX, p_view_transform);
+						state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_MATRIX, p_projection);
+						state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_INVERSE_MATRIX, p_projection.inverse());
+
+						state.scene_shader.set_uniform(SceneShaderGLES2::TIME, storage->frame.time[0]);
+
+						state.scene_shader.set_uniform(SceneShaderGLES2::SCREEN_PIXEL_SIZE, screen_pixel_size);
+						state.scene_shader.set_uniform(SceneShaderGLES2::NORMAL_MULT, 1.0); // TODO mirror?
+						state.scene_shader.set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, e->instance->transform);
+					}
 					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_TYPE, (int)0);
 					Vector3 direction = p_view_transform.inverse().basis.xform(light->transform.basis.xform(Vector3(0, 0, -1))).normalized();
 					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_DIRECTION, direction);
@@ -1609,6 +1640,27 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 				default: {
 					continue;
 				} break;
+			}
+
+			{
+				bool has_shadow_atlas = shadow_atlas != NULL;
+				_setup_material(material, false, p_reverse_cull, has_shadow_atlas, skeleton ? (skeleton->tex_id != 0) : 0, Size2i(skeleton ? skeleton->size * 3 : 0, 0));
+
+				if (has_shadow_atlas) {
+					glActiveTexture(GL_TEXTURE3);
+					glBindTexture(GL_TEXTURE_2D, shadow_atlas->depth);
+				}
+
+				state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_MATRIX, p_view_transform.inverse());
+				state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_INVERSE_MATRIX, p_view_transform);
+				state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_MATRIX, p_projection);
+				state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_INVERSE_MATRIX, p_projection.inverse());
+
+				state.scene_shader.set_uniform(SceneShaderGLES2::TIME, storage->frame.time[0]);
+
+				state.scene_shader.set_uniform(SceneShaderGLES2::SCREEN_PIXEL_SIZE, screen_pixel_size);
+				state.scene_shader.set_uniform(SceneShaderGLES2::NORMAL_MULT, 1.0); // TODO mirror?
+				state.scene_shader.set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, e->instance->transform);
 			}
 
 			float energy = light_ptr->param[VS::LIGHT_PARAM_ENERGY];
@@ -1625,6 +1677,9 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 	}
 
 	state.scene_shader.set_conditional(SceneShaderGLES2::USE_RADIANCE_MAP, false);
+	state.scene_shader.set_conditional(SceneShaderGLES2::LIGHT_USE_PSSM4, false);
+	state.scene_shader.set_conditional(SceneShaderGLES2::LIGHT_USE_PSSM2, false);
+	state.scene_shader.set_conditional(SceneShaderGLES2::LIGHT_USE_PSSM_BLEND, false);
 }
 
 void RasterizerSceneGLES2::_draw_sky(RasterizerStorageGLES2::Sky *p_sky, const CameraMatrix &p_projection, const Transform &p_transform, bool p_vflip, float p_custom_fov, float p_energy) {

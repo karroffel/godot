@@ -351,6 +351,11 @@ uniform float light_has_shadow;
 uniform mat4 light_shadow_matrix;
 uniform vec4 light_clamp;
 
+// directional shadow
+
+uniform highp sampler2D light_directional_shadow; // texunit:3
+uniform vec4 shadow_split_offsets;
+
 #endif
 
 
@@ -610,26 +615,40 @@ FRAGMENT_SHADER_CODE
 
 		vec3 light_vec = -light_direction;
 		vec3 attenuation = vec3(1.0, 1.0, 1.0);
+		
+		float depth_z = -vertex.z;
+		
+#ifdef LIGHT_USE_PSSM4
+		
+#elif defined(LIGHT_USE_PSSM2)
+		
+#else
+		
+#endif
+		
+#ifdef LIGHT_USE_PSSM_BLEND
+		
+#endif
 
 		light_compute(normal,
 		              normalize(light_vec),
-			      eye_position,
-			      binormal,
-			      tangent,
-			      light_color.xyz * light_energy,
+		              eye_position,
+		              binormal,
+		              tangent,
+		              light_color.xyz * light_energy,
 		              attenuation,
-			      albedo,
-			      transmission,
+		              albedo,
+		              transmission,
 		              specular * light_specular,
-			      roughness,
-			      metallic,
-			      rim,
-			      rim_tint,
-			      clearcoat,
-			      clearcoat_gloss,
-			      anisotropy,
-			      diffuse_light,
-			      specular_light);
+		              roughness,
+		              metallic,
+		              rim,
+		              rim_tint,
+		              clearcoat,
+		              clearcoat_gloss,
+		              anisotropy,
+		              diffuse_light,
+		              specular_light);
 	} else if (light_type == LIGHT_TYPE_SPOT) {
 
 		vec3 light_att = vec3(1.0);
