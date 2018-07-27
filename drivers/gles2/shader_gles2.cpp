@@ -151,7 +151,7 @@ bool ShaderGLES2::bind() {
 		uniform_name[len] = '\0';
 		String name = String((const char *)uniform_name);
 
-		version->uniform_names[i] = name;
+		version->uniform_names.write[i] = name;
 	}
 
 	bind_uniforms();
@@ -536,14 +536,14 @@ ShaderGLES2::Version *ShaderGLES2::get_current_version() {
 		for (int i = 0; i < cc->custom_uniforms.size(); i++) {
 			StringName native_uniform_name = "m_" + cc->custom_uniforms[i];
 			GLint location = glGetUniformLocation(v.id, ((String)native_uniform_name).ascii().get_data());
-			v.custom_uniform_locations.write[cc->custom_uniforms[i]] = location;
+			v.custom_uniform_locations[cc->custom_uniforms[i]] = location;
 		}
 
 		// textures
 		for (int i = 0; i < cc->texture_uniforms.size(); i++) {
 			StringName native_uniform_name = "m_" + cc->texture_uniforms[i];
 			GLint location = glGetUniformLocation(v.id, ((String)native_uniform_name).ascii().get_data());
-			v.custom_uniform_locations.write[cc->texture_uniforms[i]] = location;
+			v.custom_uniform_locations[cc->texture_uniforms[i]] = location;
 		}
 	}
 
@@ -755,24 +755,24 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 				case ShaderLanguage::TYPE_BOOL: {
 					if (value.second.size() < 1)
 						value.second.resize(1);
-					value.second[0].boolean = V->get();
+					value.second.write[0].boolean = V->get();
 				} break;
 
 				case ShaderLanguage::TYPE_BVEC2: {
 					if (value.second.size() < 2)
 						value.second.resize(2);
 					int flags = V->get();
-					value.second[0].boolean = flags & 1;
-					value.second[1].boolean = flags & 2;
+					value.second.write[0].boolean = flags & 1;
+					value.second.write[1].boolean = flags & 2;
 				} break;
 
 				case ShaderLanguage::TYPE_BVEC3: {
 					if (value.second.size() < 3)
 						value.second.resize(3);
 					int flags = V->get();
-					value.second[0].boolean = flags & 1;
-					value.second[1].boolean = flags & 2;
-					value.second[2].boolean = flags & 4;
+					value.second.write[0].boolean = flags & 1;
+					value.second.write[1].boolean = flags & 2;
+					value.second.write[2].boolean = flags & 4;
 
 				} break;
 
@@ -780,10 +780,10 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 					if (value.second.size() < 4)
 						value.second.resize(4);
 					int flags = V->get();
-					value.second[0].boolean = flags & 1;
-					value.second[1].boolean = flags & 2;
-					value.second[2].boolean = flags & 4;
-					value.second[3].boolean = flags & 8;
+					value.second.write[0].boolean = flags & 1;
+					value.second.write[1].boolean = flags & 2;
+					value.second.write[2].boolean = flags & 4;
+					value.second.write[3].boolean = flags & 8;
 
 				} break;
 
@@ -791,7 +791,7 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 					if (value.second.size() < 1)
 						value.second.resize(1);
 					int val = V->get();
-					value.second[0].sint = val;
+					value.second.write[0].sint = val;
 				} break;
 
 				case ShaderLanguage::TYPE_IVEC2: {
@@ -799,7 +799,7 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 						value.second.resize(2);
 					PoolIntArray val = V->get();
 					for (int i = 0; i < val.size(); i++) {
-						value.second[i].sint = val[i];
+						value.second.write[i].sint = val[i];
 					}
 				} break;
 
@@ -808,7 +808,7 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 						value.second.resize(3);
 					PoolIntArray val = V->get();
 					for (int i = 0; i < val.size(); i++) {
-						value.second[i].sint = val[i];
+						value.second.write[i].sint = val[i];
 					}
 
 				} break;
@@ -818,7 +818,7 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 						value.second.resize(4);
 					PoolIntArray val = V->get();
 					for (int i = 0; i < val.size(); i++) {
-						value.second[i].sint = val[i];
+						value.second.write[i].sint = val[i];
 					}
 
 				} break;
@@ -827,7 +827,7 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 					if (value.second.size() < 1)
 						value.second.resize(1);
 					uint32_t val = V->get();
-					value.second[0].uint = val;
+					value.second.write[0].uint = val;
 				} break;
 
 				case ShaderLanguage::TYPE_UVEC2: {
@@ -835,7 +835,7 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 						value.second.resize(2);
 					PoolIntArray val = V->get();
 					for (int i = 0; i < val.size(); i++) {
-						value.second[i].uint = val[i];
+						value.second.write[i].uint = val[i];
 					}
 
 				} break;
@@ -845,7 +845,7 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 						value.second.resize(3);
 					PoolIntArray val = V->get();
 					for (int i = 0; i < val.size(); i++) {
-						value.second[i].uint = val[i];
+						value.second.write[i].uint = val[i];
 					}
 
 				} break;
@@ -855,7 +855,7 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 						value.second.resize(4);
 					PoolIntArray val = V->get();
 					for (int i = 0; i < val.size(); i++) {
-						value.second[i].uint = val[i];
+						value.second.write[i].uint = val[i];
 					}
 
 				} break;
@@ -863,7 +863,7 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 				case ShaderLanguage::TYPE_FLOAT: {
 					if (value.second.size() < 1)
 						value.second.resize(1);
-					value.second[0].real = V->get();
+					value.second.write[0].real = V->get();
 
 				} break;
 
@@ -871,17 +871,17 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 					if (value.second.size() < 2)
 						value.second.resize(2);
 					Vector2 val = V->get();
-					value.second[0].real = val.x;
-					value.second[1].real = val.y;
+					value.second.write[0].real = val.x;
+					value.second.write[1].real = val.y;
 				} break;
 
 				case ShaderLanguage::TYPE_VEC3: {
 					if (value.second.size() < 3)
 						value.second.resize(3);
 					Vector3 val = V->get();
-					value.second[0].real = val.x;
-					value.second[1].real = val.y;
-					value.second[2].real = val.z;
+					value.second.write[0].real = val.x;
+					value.second.write[1].real = val.y;
+					value.second.write[2].real = val.z;
 				} break;
 
 				case ShaderLanguage::TYPE_VEC4: {
@@ -889,16 +889,16 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 						value.second.resize(4);
 					if (V->get().get_type() == Variant::PLANE) {
 						Plane val = V->get();
-						value.second[0].real = val.normal.x;
-						value.second[1].real = val.normal.y;
-						value.second[2].real = val.normal.z;
-						value.second[3].real = val.d;
+						value.second.write[0].real = val.normal.x;
+						value.second.write[1].real = val.normal.y;
+						value.second.write[2].real = val.normal.z;
+						value.second.write[3].real = val.d;
 					} else {
 						Color val = V->get();
-						value.second[0].real = val.r;
-						value.second[1].real = val.g;
-						value.second[2].real = val.b;
-						value.second[3].real = val.a;
+						value.second.write[0].real = val.r;
+						value.second.write[1].real = val.g;
+						value.second.write[2].real = val.b;
+						value.second.write[3].real = val.a;
 					}
 
 				} break;
@@ -998,9 +998,9 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 
 				for (int i = 0; i < default_arg_size; i++) {
 					if (is_float) {
-						value.second[i].real = 0.0;
+						value.second.write[i].real = 0.0;
 					} else {
-						value.second[i].uint = 0;
+						value.second.write[i].uint = 0;
 					}
 				}
 			}
@@ -1034,7 +1034,7 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 		Pair<ShaderLanguage::DataType, Vector<ShaderLanguage::ConstantNode::Value> > value;
 		value.first = ShaderLanguage::TYPE_INT;
 		value.second.resize(1);
-		value.second[0].sint = p_num_predef_textures + i;
+		value.second.write[0].sint = p_num_predef_textures + i;
 
 		// GLint location = get_uniform_location(textures[i].first);
 

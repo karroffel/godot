@@ -306,7 +306,7 @@ bool RasterizerSceneGLES2::shadow_atlas_update_light(RID p_atlas, RID p_light_in
 		bool should_redraw = shadow_atlas->quadrants[q].shadows[s].version != p_light_version;
 
 		if (!should_realloc) {
-			shadow_atlas->quadrants[q].shadows[s].version = p_light_version;
+			shadow_atlas->quadrants[q].shadows.write[s].version = p_light_version;
 			return should_redraw;
 		}
 
@@ -318,7 +318,7 @@ bool RasterizerSceneGLES2::shadow_atlas_update_light(RID p_atlas, RID p_light_in
 		if (_shadow_atlas_find_shadow(shadow_atlas, valid_quadrants, valid_quadrant_count, shadow_atlas->quadrants[q].subdivision, tick, new_quadrant, new_shadow)) {
 			// found a better place
 
-			ShadowAtlas::Quadrant::Shadow *sh = &shadow_atlas->quadrants[new_quadrant].shadows[new_shadow];
+			ShadowAtlas::Quadrant::Shadow *sh = &shadow_atlas->quadrants[new_quadrant].shadows.write[new_shadow];
 			if (sh->owner.is_valid()) {
 				// it is take but invalid, so we can take it
 
@@ -328,8 +328,8 @@ bool RasterizerSceneGLES2::shadow_atlas_update_light(RID p_atlas, RID p_light_in
 			}
 
 			// erase previous
-			shadow_atlas->quadrants[q].shadows[s].version = 0;
-			shadow_atlas->quadrants[q].shadows[s].owner = RID();
+			shadow_atlas->quadrants[q].shadows.write[s].version = 0;
+			shadow_atlas->quadrants[q].shadows.write[s].owner = RID();
 
 			sh->owner = p_light_intance;
 			sh->alloc_tick = tick;
@@ -349,7 +349,7 @@ bool RasterizerSceneGLES2::shadow_atlas_update_light(RID p_atlas, RID p_light_in
 
 		// no better place found, so we keep the current place
 
-		shadow_atlas->quadrants[q].shadows[s].version = p_light_version;
+		shadow_atlas->quadrants[q].shadows.write[s].version = p_light_version;
 
 		return should_redraw;
 	}
@@ -360,7 +360,7 @@ bool RasterizerSceneGLES2::shadow_atlas_update_light(RID p_atlas, RID p_light_in
 	if (_shadow_atlas_find_shadow(shadow_atlas, valid_quadrants, valid_quadrant_count, -1, tick, new_quadrant, new_shadow)) {
 		// found a better place
 
-		ShadowAtlas::Quadrant::Shadow *sh = &shadow_atlas->quadrants[new_quadrant].shadows[new_shadow];
+		ShadowAtlas::Quadrant::Shadow *sh = &shadow_atlas->quadrants[new_quadrant].shadows.write[new_shadow];
 		if (sh->owner.is_valid()) {
 			// it is take but invalid, so we can take it
 
@@ -1210,7 +1210,7 @@ void RasterizerSceneGLES2::_render_geometry(RenderList::Element *p_element) {
 			// drawing
 
 			for (int i = 0; i < amount; i++) {
-				float *buffer = &multi_mesh->data[i * stride];
+				float *buffer = &multi_mesh->data.write[i * stride];
 
 				{
 					// inline of multimesh_get_transform since it's such a pain
