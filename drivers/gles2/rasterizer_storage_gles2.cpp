@@ -46,20 +46,11 @@ GLuint RasterizerStorageGLES2::system_fbo = 0;
 
 #define _EXT_ETC1_RGB8_OES 0x8D64
 
-static void glTexStorage2DCustom(GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, GLenum format, GLenum type) {
-
 #ifdef GLES_OVER_GL
-
-	for (int i = 0; i < levels; i++) {
-		glTexImage2D(target, i, internalformat, width, height, 0, format, type, NULL);
-		width = MAX(1, (width / 2));
-		height = MAX(1, (height / 2));
-	}
-
+#define _GL_HALF_FLOAT_OES 0x140B
 #else
-	glTexStorage2D(target, levels, internalformat, width, height);
+#define _GL_HALF_FLOAT_OES 0x8D61
 #endif
-}
 
 void RasterizerStorageGLES2::bind_quad_array() const {
 	glBindBuffer(GL_ARRAY_BUFFER, resources.quadie);
@@ -541,9 +532,6 @@ void RasterizerStorageGLES2::texture_set_data(RID p_texture, const Ref<Image> &p
 	if ((texture->flags & VS::TEXTURE_FLAG_MIPMAPS) && mipmaps == 1 && !texture->ignore_mipmaps && (!(texture->flags & VS::TEXTURE_FLAG_CUBEMAP) || texture->stored_cube_sides == (1 << 6) - 1)) {
 		//generate mipmaps if they were requested and the image does not contain them
 		glGenerateMipmap(texture->target);
-	} else if (mipmaps > 1) {
-		glTexParameteri(texture->target, GL_TEXTURE_BASE_LEVEL, 0);
-		glTexParameteri(texture->target, GL_TEXTURE_MAX_LEVEL, mipmaps - 1);
 	}
 
 	texture->mipmaps = mipmaps;
@@ -894,21 +882,16 @@ void RasterizerStorageGLES2::sky_set_texture(RID p_sky, RID p_panorama, int p_ra
 	GLenum type = GL_UNSIGNED_BYTE; // This is suboptimal... TODO other format for FBO?
 
 	// Set the initial (empty) mipmaps
-	while (mm_level) {
+	while (size >= 1) {
 
 		for (int i = 0; i < 6; i++) {
 			glTexImage2D(_cube_side_enum[i], lod, internal_format, size, size, 0, format, type, NULL);
 		}
 
 		lod++;
-		mm_level--;
 
-		if (size > 1)
-			size >>= 1;
+		size >>= 1;
 	}
-
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_BASE_LEVEL, 0);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAX_LEVEL, lod - 1);
 
 	lod = 0;
 	mm_level = mipmaps;
@@ -916,7 +899,7 @@ void RasterizerStorageGLES2::sky_set_texture(RID p_sky, RID p_panorama, int p_ra
 	size = p_radiance_size;
 
 	// now render to the framebuffer, mipmap level for mipmap level
-	while (mm_level) {
+	while (size >= 1) {
 
 		for (int i = 0; i < 6; i++) {
 			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, _cube_side_enum[i], sky->radiance, lod);
@@ -926,22 +909,21 @@ void RasterizerStorageGLES2::sky_set_texture(RID p_sky, RID p_panorama, int p_ra
 			bind_quad_array();
 
 			shaders.cubemap_filter.set_uniform(CubemapFilterShaderGLES2::FACE_ID, i);
-			shaders.cubemap_filter.set_uniform(CubemapFilterShaderGLES2::ROUGHNESS, lod / (float)(mipmaps - 1));
+
+			float roughness = mm_level ? lod / (float)(mipmaps - 1) : 1;
+			shaders.cubemap_filter.set_uniform(CubemapFilterShaderGLES2::ROUGHNESS, roughness);
 
 			glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 		}
 
-		if (size > 1)
-			size >>= 1;
+		size >>= 1;
+
+		mm_level--;
 
 		lod++;
-		mm_level--;
 	}
 
 	// restore ranges
-
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_BASE_LEVEL, 0);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAX_LEVEL, lod - 1);
 
 	glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 	glTexParameterf(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -1637,7 +1619,7 @@ void RasterizerStorageGLES2::mesh_add_surface(RID p_mesh, uint32_t p_format, VS:
 				}
 
 				if (p_format & VS::ARRAY_COMPRESS_VERTEX) {
-					attribs[i].type = GL_HALF_FLOAT;
+					attribs[i].type = _GL_HALF_FLOAT_OES;
 					stride += attribs[i].size * 2;
 				} else {
 					attribs[i].type = GL_FLOAT;
@@ -1697,7 +1679,7 @@ void RasterizerStorageGLES2::mesh_add_surface(RID p_mesh, uint32_t p_format, VS:
 				attribs[i].size = 2;
 
 				if (p_format & VS::ARRAY_COMPRESS_TEX_UV) {
-					attribs[i].type = GL_HALF_FLOAT;
+					attribs[i].type = _GL_HALF_FLOAT_OES;
 					stride += 4;
 				} else {
 					attribs[i].type = GL_FLOAT;
@@ -1712,7 +1694,7 @@ void RasterizerStorageGLES2::mesh_add_surface(RID p_mesh, uint32_t p_format, VS:
 				attribs[i].size = 2;
 
 				if (p_format & VS::ARRAY_COMPRESS_TEX_UV2) {
-					attribs[i].type = GL_HALF_FLOAT;
+					attribs[i].type = _GL_HALF_FLOAT_OES;
 					stride += 4;
 				} else {
 					attribs[i].type = GL_FLOAT;
