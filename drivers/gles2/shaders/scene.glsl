@@ -354,8 +354,12 @@ uniform vec4 light_clamp;
 // directional shadow
 
 uniform highp sampler2D light_directional_shadow; // texunit:3
-uniform vec4 shadow_split_offsets;
+uniform vec4 light_split_offsets;
 
+uniform mat4 light_shadow_matrix1;
+uniform mat4 light_shadow_matrix2;
+uniform mat4 light_shadow_matrix3;
+uniform mat4 light_shadow_matrix4;
 #endif
 
 
@@ -455,9 +459,10 @@ float sample_shadow(highp sampler2D shadow,
                     float depth,
                     vec4 clamp_rect)
 {
-	vec4 depth_value = texture2D(shadow, pos);
+	// vec4 depth_value = texture2D(shadow, pos);
 	
-	return depth_value.z;
+	// return depth_value.z;
+	return texture2DProj(shadow, vec4(pos, depth, 1.0)).r;
 	// return (depth_value.x + depth_value.y + depth_value.z + depth_value.w) / 4.0;
 }
 
@@ -524,7 +529,8 @@ FRAGMENT_SHADER_CODE
 	normalmap.xy = normalmap.xy * 2.0 - 1.0;
 	normalmap.z = sqrt(1.0 - dot(normalmap.xy, normalmap.xy));
 
-	normal = normalize(mix(normal_interp, tangent * normalmap.x + binormal * normalmap.y + normal * normalmap.z, normaldepth)) * side;
+	// normal = normalize(mix(normal_interp, tangent * normalmap.x + binormal * normalmap.y + normal * normalmap.z, normaldepth)) * side;
+	normal = normalmap;
 #endif
 
 	normal = normalize(normal);
@@ -618,17 +624,117 @@ FRAGMENT_SHADER_CODE
 		
 		float depth_z = -vertex.z;
 		
+		if (light_has_shadow > 0.5) {
+		
 #ifdef LIGHT_USE_PSSM4
-		
+			if (depth_z < light_split_offsets.w) {
 #elif defined(LIGHT_USE_PSSM2)
-		
+			if (depth_z < light_split_offsets.y) {
 #else
-		
+			if (depth_z < light_split_offsets.x) {
 #endif
 		
+			vec3 pssm_coord;
+			float pssm_fade = 0.0;
+			
 #ifdef LIGHT_USE_PSSM_BLEND
-		
+			float pssm_blend;
+			vec3 pssm_coord2;
+			bool use_blend = true;
 #endif
+			
+#ifdef LIGHT_USE_PSSM4
+			if (depth_z < light_split_offsets.y) {
+				if (depth_z < light_split_offsets.x) {
+					highp vec4 splane = (light_shadow_matrix1 * vec4(vertex, 1.0));
+					pssm_coord = splane.xyz / splane.w;
+					
+#ifdef LIGHT_USE_PSSM_BLEND
+					splane = (light_shadow_matrix2 * vec4(vertex, 1.0));
+					pssm_coord2 = splane.xyz / splane.w;
+					
+					pssm_blend = smoothstep(0.0, light_split_offsets.x, depth_z);
+#endif
+				} else {
+					highp vec4 splane = (light_shadow_matrix2 * vec4(vertex, 1.0));
+					pssm_coord = splane.xyz / splane.w;
+					
+#ifdef LIGHT_USE_PSSM_BLEND
+					splane = (light_shadow_matrix3 * vec4(vertex, 1.0));
+					pssm_coord2 = splane.xyz / splane.w;
+					
+					pssm_blend = smoothstep(light_split_offsets.x, light_split_offsets.y, depth_z);
+#endif
+				}
+			} else {
+				if (depth_z < light_split_offsets.z) {
+
+					highp vec4 splane = (light_shadow_matrix3 * vec4(vertex, 1.0));
+					pssm_coord = splane.xyz / splane.w;
+
+#if defined(LIGHT_USE_PSSM_BLEND)
+					splane = (light_shadow_matrix4 * vec4(vertex, 1.0));
+					pssm_coord2 = splane.xyz / splane.w;
+					pssm_blend = smoothstep(light_split_offsets.y, light_split_offsets.z, depth_z);
+#endif
+
+				} else {
+
+					highp vec4 splane = (light_shadow_matrix4 * vec4(vertex, 1.0));
+					pssm_coord = splane.xyz / splane.w;
+					pssm_fade = smoothstep(light_split_offsets.z, light_split_offsets.w, depth_z);
+
+#if defined(LIGHT_USE_PSSM_BLEND)
+					use_blend = false;
+#endif
+				}
+			}
+			
+#endif // LIGHT_USE_PSSM4
+			
+#ifdef LIGHT_USE_PSSM2
+			if (depth_z < light_split_offsets.x) {
+				
+				highp vec4 splane = (light_shadow_matrix1 * vec4(vertex, 1.0));
+				pssm_coord = splane.xyz / splane.w;
+				
+#ifdef LIGHT_USE_PSSM_BLEND
+				splane = (light_shadow_matrix2 * vec4(vertex, 1.0));
+				pssm_coord2 = splane.xyz / splane.w;
+				pssm_blend = smoothstep(0.0, light_split_offsets.x, depth_z);
+#endif
+			} else {
+				highp vec4 splane = (light_shadow_matrix2 * vec4(vertex, 1.0));
+				pssm_coord = splane.xyz / splane.w;
+				pssm_fade = smoothstep(light_split_offsets.x, light_split_offsets.y, depth_z);
+#ifdef LIGHT_USE_PSSM_BLEND
+				use_blend = false;
+#endif
+			}
+			
+#endif // LIGHT_USE_PSSM2
+			
+#if !defined(LIGHT_USE_PSSM4) && !defined(LIGHT_USE_PSSM2)
+			{
+				highp vec4 splane = (light_shadow_matrix1 * vec4(vertex, 1.0));
+				pssm_coord = splane.xyz / splane.w;
+			}
+#endif
+			
+			float shadow = sample_shadow(light_shadow_atlas, vec2(0.0), pssm_coord.xy, pssm_coord.z, light_clamp);
+			
+#ifdef LIGHT_USE_PSSM_BLEND
+			if (use_blend) {
+				shadow = mix(shadow, sample_shadow(light_shadow_atlas, vec2(0.0), pssm_coord2.xy, pssm_coord2.z, light_clamp), pssm_blend);
+			}
+#endif
+			
+			attenuation *= shadow;
+			
+			
+		}
+			
+		}
 
 		light_compute(normal,
 		              normalize(light_vec),

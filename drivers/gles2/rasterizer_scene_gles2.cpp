@@ -1620,6 +1620,11 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 					{
 						_setup_material(material, false, p_reverse_cull, false, skeleton ? (skeleton->tex_id != 0) : 0, Size2i(skeleton ? skeleton->size * 3 : 0, 0));
 
+						if (directional_shadow.depth) {
+							glActiveTexture(GL_TEXTURE3);
+							glBindTexture(GL_TEXTURE_2D, directional_shadow.depth);
+						}
+
 						state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_MATRIX, p_view_transform.inverse());
 						state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_INVERSE_MATRIX, p_view_transform);
 						state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_MATRIX, p_projection);
@@ -1642,33 +1647,109 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 				} break;
 			}
 
-			{
-				bool has_shadow_atlas = shadow_atlas != NULL;
-				_setup_material(material, false, p_reverse_cull, has_shadow_atlas, skeleton ? (skeleton->tex_id != 0) : 0, Size2i(skeleton ? skeleton->size * 3 : 0, 0));
-
-				if (has_shadow_atlas) {
-					glActiveTexture(GL_TEXTURE3);
-					glBindTexture(GL_TEXTURE_2D, shadow_atlas->depth);
-				}
-
-				state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_MATRIX, p_view_transform.inverse());
-				state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_INVERSE_MATRIX, p_view_transform);
-				state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_MATRIX, p_projection);
-				state.scene_shader.set_uniform(SceneShaderGLES2::PROJECTION_INVERSE_MATRIX, p_projection.inverse());
-
-				state.scene_shader.set_uniform(SceneShaderGLES2::TIME, storage->frame.time[0]);
-
-				state.scene_shader.set_uniform(SceneShaderGLES2::SCREEN_PIXEL_SIZE, screen_pixel_size);
-				state.scene_shader.set_uniform(SceneShaderGLES2::NORMAL_MULT, 1.0); // TODO mirror?
-				state.scene_shader.set_uniform(SceneShaderGLES2::WORLD_TRANSFORM, e->instance->transform);
-			}
-
 			float energy = light_ptr->param[VS::LIGHT_PARAM_ENERGY];
 			float specular = light_ptr->param[VS::LIGHT_PARAM_SPECULAR];
 
 			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_ENERGY, energy);
-			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_COLOR, light_ptr->color.to_linear());
 			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_SPECULAR, specular);
+
+			float sign = light_ptr->negative ? -1 : 1;
+
+			Color linear_col = light_ptr->color.to_linear();
+			Color color;
+			for (int c = 0; c < 3; c++)
+				color[c] = linear_col[c] * sign * energy * Math_PI;
+
+			color[3] = 0;
+
+			state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_COLOR, color);
+
+			CameraMatrix matrices[4];
+
+			if (light_ptr->shadow && directional_shadow.depth) {
+
+				int shadow_count = 0;
+				Color split_offsets;
+
+				switch (light_ptr->directional_shadow_mode) {
+					case VS::LIGHT_DIRECTIONAL_SHADOW_ORTHOGONAL: {
+						shadow_count = 1;
+					} break;
+
+					case VS::LIGHT_DIRECTIONAL_SHADOW_PARALLEL_2_SPLITS: {
+						shadow_count = 2;
+					} break;
+
+					case VS::LIGHT_DIRECTIONAL_SHADOW_PARALLEL_4_SPLITS: {
+						shadow_count = 4;
+					} break;
+				}
+
+				for (int k = 0; k < shadow_count; k++) {
+
+					uint32_t x = light->directional_rect.position.x;
+					uint32_t y = light->directional_rect.position.y;
+					uint32_t width = light->directional_rect.size.x;
+					uint32_t height = light->directional_rect.size.y;
+
+					if (light_ptr->directional_shadow_mode == VS::LIGHT_DIRECTIONAL_SHADOW_PARALLEL_4_SPLITS) {
+
+						width /= 2;
+						height /= 2;
+
+						if (k == 0) {
+
+						} else if (k == 1) {
+							x += width;
+						} else if (k == 2) {
+							y += height;
+						} else if (k == 3) {
+							x += width;
+							y += height;
+						}
+
+					} else if (light_ptr->directional_shadow_mode == VS::LIGHT_DIRECTIONAL_SHADOW_PARALLEL_2_SPLITS) {
+
+						height /= 2;
+
+						if (k == 0) {
+
+						} else {
+							y += height;
+						}
+					}
+
+					split_offsets[k] = light->shadow_transform[k].split;
+
+					Transform modelview = (p_view_transform * light->shadow_transform[k].transform).inverse();
+
+					CameraMatrix bias;
+					bias.set_light_bias();
+					CameraMatrix rectm;
+					Rect2 atlas_rect = Rect2(float(x) / directional_shadow.size, float(y) / directional_shadow.size, float(width) / directional_shadow.size, float(height) / directional_shadow.size);
+					rectm.set_light_atlas_rect(atlas_rect);
+
+					CameraMatrix shadow_mtx = rectm * bias * light->shadow_transform[k].camera * modelview;
+					matrices[k] = shadow_mtx.inverse();
+
+					Color light_clamp;
+					light_clamp[0] = atlas_rect.position.x;
+					light_clamp[1] = atlas_rect.position.y;
+					light_clamp[2] = atlas_rect.size.x;
+					light_clamp[3] = atlas_rect.size.y;
+
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_HAS_SHADOW, 1.0);
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_CLAMP, light_clamp);
+					state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_SPLIT_OFFSETS, split_offsets);
+				}
+
+				state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_SHADOW_MATRIX1, matrices[0]);
+				state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_SHADOW_MATRIX2, matrices[1]);
+				state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_SHADOW_MATRIX3, matrices[2]);
+				state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_SHADOW_MATRIX4, matrices[3]);
+			} else {
+				state.scene_shader.set_uniform(SceneShaderGLES2::LIGHT_HAS_SHADOW, 0.0);
+			}
 
 			_render_geometry(e);
 		}
