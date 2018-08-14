@@ -216,6 +216,7 @@ public:
 		int size;
 
 		GLuint fbo;
+		GLuint color;
 		GLuint depth;
 
 		Map<RID, uint32_t> shadow_owners;
@@ -224,6 +225,7 @@ public:
 	struct ShadowCubeMap {
 		GLuint fbo[6];
 		GLuint cubemap;
+		GLuint renderbuffers[6];
 		uint32_t size;
 	};
 
@@ -240,6 +242,7 @@ public:
 	struct DirectionalShadow {
 		GLuint fbo;
 		GLuint depth;
+		GLuint color;
 
 		int light_count;
 		int size;

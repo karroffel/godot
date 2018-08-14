@@ -59,6 +59,7 @@ RID RasterizerSceneGLES2::shadow_atlas_create() {
 	ShadowAtlas *shadow_atlas = memnew(ShadowAtlas);
 	shadow_atlas->fbo = 0;
 	shadow_atlas->depth = 0;
+	shadow_atlas->color = 0;
 	shadow_atlas->size = 0;
 	shadow_atlas->smallest_subdiv = 0;
 
@@ -81,10 +82,17 @@ void RasterizerSceneGLES2::shadow_atlas_set_size(RID p_atlas, int p_size) {
 
 	// erase the old atlast
 	if (shadow_atlas->fbo) {
-		glDeleteTextures(1, &shadow_atlas->depth);
+		if (storage->config.depth_tex_supported) {
+			glDeleteTextures(1, &shadow_atlas->depth);
+		} else {
+			glDeleteTextures(1, &shadow_atlas->color);
+			glDeleteRenderbuffers(1, &shadow_atlas->depth);
+		}
+
 		glDeleteFramebuffers(1, &shadow_atlas->fbo);
 
 		shadow_atlas->fbo = 0;
+		shadow_atlas->color = 0;
 		shadow_atlas->depth = 0;
 	}
 
@@ -104,17 +112,37 @@ void RasterizerSceneGLES2::shadow_atlas_set_size(RID p_atlas, int p_size) {
 		glBindFramebuffer(GL_FRAMEBUFFER, shadow_atlas->fbo);
 
 		// create a depth texture
-		glActiveTexture(GL_TEXTURE0);
-		glGenTextures(1, &shadow_atlas->depth);
-		glBindTexture(GL_TEXTURE_2D, shadow_atlas->depth);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT16, shadow_atlas->size, shadow_atlas->size, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, NULL);
 
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		if (storage->config.depth_tex_supported) {
+			glActiveTexture(GL_TEXTURE0);
+			glGenTextures(1, &shadow_atlas->depth);
+			glBindTexture(GL_TEXTURE_2D, shadow_atlas->depth);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, shadow_atlas->size, shadow_atlas->size, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, NULL);
 
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadow_atlas->depth, 0);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadow_atlas->depth, 0);
+		} else {
+			glGenRenderbuffers(1, &shadow_atlas->depth);
+			glBindRenderbuffer(GL_RENDERBUFFER, shadow_atlas->depth);
+			glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, shadow_atlas->size, shadow_atlas->size);
+
+			glActiveTexture(GL_TEXTURE0);
+			glGenTextures(1, &shadow_atlas->color);
+			glBindTexture(GL_TEXTURE_2D, shadow_atlas->color);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, shadow_atlas->size, shadow_atlas->size, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, shadow_atlas->color, 0);
+			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, shadow_atlas->depth);
+		}
 
 		glViewport(0, 0, shadow_atlas->size, shadow_atlas->size);
 
@@ -1571,7 +1599,11 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 				_setup_material(material, p_reverse_cull, Size2i(skeleton ? skeleton->size * 3 : 0, 0));
 				if (shadow_atlas != NULL) {
 					glActiveTexture(GL_TEXTURE0 + storage->config.max_texture_image_units - 4);
-					glBindTexture(GL_TEXTURE_2D, shadow_atlas->depth);
+					if (storage->config.depth_tex_supported) {
+						glBindTexture(GL_TEXTURE_2D, shadow_atlas->depth);
+					} else {
+						glBindTexture(GL_TEXTURE_2D, shadow_atlas->color);
+					}
 				}
 
 				state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_MATRIX, p_view_transform.inverse());
@@ -1761,7 +1793,12 @@ void RasterizerSceneGLES2::_render_render_list(RenderList::Element **p_elements,
 
 				if (directional_shadow.depth) {
 					glActiveTexture(GL_TEXTURE0 + storage->config.max_texture_image_units - 4); // TODO move into base pass
-					glBindTexture(GL_TEXTURE_2D, directional_shadow.depth);
+
+					if (storage->config.depth_tex_supported) {
+						glBindTexture(GL_TEXTURE_2D, directional_shadow.depth);
+					} else {
+						glBindTexture(GL_TEXTURE_2D, directional_shadow.color);
+					}
 				}
 
 				state.scene_shader.set_uniform(SceneShaderGLES2::CAMERA_MATRIX, p_view_transform.inverse());
@@ -2070,21 +2107,30 @@ void RasterizerSceneGLES2::render_scene(const Transform &p_cam_transform, const 
 	glDepthMask(GL_FALSE);
 	glDisable(GL_DEPTH_TEST);
 
-	// #define GLES2_SHADOW_ATLAS_DEBUG_VIEW
+#define GLES2_SHADOW_ATLAS_DEBUG_VIEW
 
 #ifdef GLES2_SHADOW_ATLAS_DEBUG_VIEW
+
+	glDisable(GL_BLEND);
+
 	ShadowAtlas *shadow_atlas = shadow_atlas_owner.getornull(p_shadow_atlas);
 	if (shadow_atlas) {
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, shadow_atlas->depth);
+		if (storage->config.depth_tex_supported) {
+			glBindTexture(GL_TEXTURE_2D, shadow_atlas->depth);
+		} else {
+			glBindTexture(GL_TEXTURE_2D, shadow_atlas->color);
+		}
 
 		glViewport(0, 0, storage->frame.current_rt->width / 4, storage->frame.current_rt->height / 4);
 		storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUBEMAP, false);
 		storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_COPY_SECTION, false);
-		storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUSTOM_ALPHA, false);
+		storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_CUSTOM_ALPHA, true);
 		storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_MULTIPLIER, false);
 		storage->shaders.copy.set_conditional(CopyShaderGLES2::USE_PANORAMA, false);
 		storage->shaders.copy.bind();
+
+		storage->shaders.copy.set_uniform(CopyShaderGLES2::CUSTOM_ALPHA, 1.0);
 
 		storage->_copy_screen();
 	}
@@ -2263,7 +2309,11 @@ void RasterizerSceneGLES2::render_shadow(RID p_light, RID p_shadow_atlas, int p_
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 
 	glDepthMask(GL_TRUE);
-	glColorMask(0, 0, 0, 0);
+
+	if (storage->config.depth_tex_supported)
+		glColorMask(0, 0, 0, 0);
+	else
+		glColorMask(1, 1, 1, 1);
 
 	if (custom_vp_size) {
 		glViewport(0, 0, custom_vp_size, custom_vp_size);
@@ -2275,7 +2325,8 @@ void RasterizerSceneGLES2::render_shadow(RID p_light, RID p_shadow_atlas, int p_
 
 	glEnable(GL_SCISSOR_TEST);
 	glClearDepth(1.0f);
-	glClear(GL_DEPTH_BUFFER_BIT);
+	glClearColor(0, 0, 0, 0);
+	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 	glDisable(GL_SCISSOR_TEST);
 
 	state.scene_shader.set_conditional(SceneShaderGLES2::RENDER_DEPTH, true);
@@ -2339,7 +2390,16 @@ void RasterizerSceneGLES2::set_scene_pass(uint64_t p_pass) {
 }
 
 bool RasterizerSceneGLES2::free(RID p_rid) {
-	return true;
+
+	if (shadow_atlas_owner.owns(p_rid)) {
+		ShadowAtlas *s = shadow_atlas_owner.get(p_rid);
+		memdelete(s);
+
+		shadow_atlas_owner.free(p_rid);
+		return true;
+	} else {
+		return true;
+	}
 }
 
 void RasterizerSceneGLES2::set_debug_draw_mode(VS::ViewportDebugDraw p_debug_draw) {
@@ -2348,6 +2408,8 @@ void RasterizerSceneGLES2::set_debug_draw_mode(VS::ViewportDebugDraw p_debug_dra
 void RasterizerSceneGLES2::initialize() {
 	state.scene_shader.init();
 	state.cube_to_dp_shader.init();
+
+	state.scene_shader.set_conditional(SceneShaderGLES2::DEPTH_READ_SUPPORTED, storage->config.depth_tex_supported);
 
 	render_list.init();
 
@@ -2397,24 +2459,58 @@ void RasterizerSceneGLES2::initialize() {
 
 			cube.size = cube_size;
 
-			glGenTextures(1, &cube.cubemap);
-			glBindTexture(GL_TEXTURE_CUBE_MAP, cube.cubemap);
+			if (storage->config.depth_tex_supported) {
 
-			for (int i = 0; i < 6; i++) {
-				glTexImage2D(_cube_side_enum[i], 0, GL_DEPTH_COMPONENT16, cube_size, cube_size, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, NULL);
-			}
+				glGenTextures(1, &cube.cubemap);
+				glBindTexture(GL_TEXTURE_CUBE_MAP, cube.cubemap);
 
-			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+				for (int i = 0; i < 6; i++) {
+					glTexImage2D(_cube_side_enum[i], 0, GL_DEPTH_COMPONENT, cube_size, cube_size, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, NULL);
+				}
 
-			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-			glGenFramebuffers(6, cube.fbo);
-			for (int i = 0; i < 6; i++) {
+				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-				glBindFramebuffer(GL_FRAMEBUFFER, cube.fbo[i]);
-				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, _cube_side_enum[i], cube.cubemap, 0);
+				glGenFramebuffers(6, cube.fbo);
+				for (int i = 0; i < 6; i++) {
+
+					glBindFramebuffer(GL_FRAMEBUFFER, cube.fbo[i]);
+
+					glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, _cube_side_enum[i], cube.cubemap, 0);
+				}
+			} else {
+
+				glGenRenderbuffers(6, cube.renderbuffers);
+
+				for (int i = 0; i < 6; i++) {
+					glBindRenderbuffer(GL_RENDERBUFFER, cube.renderbuffers[i]);
+					glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, cube_size, cube_size);
+				}
+
+				glGenTextures(1, &cube.cubemap);
+				glBindTexture(GL_TEXTURE_CUBE_MAP, cube.cubemap);
+
+				for (int i = 0; i < 6; i++) {
+					glTexImage2D(_cube_side_enum[i], 0, GL_RGBA, cube_size, cube_size, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+				}
+
+				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+				glGenFramebuffers(6, cube.fbo);
+				for (int i = 0; i < 6; i++) {
+
+					glBindFramebuffer(GL_FRAMEBUFFER, cube.fbo[i]);
+
+					glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, cube.renderbuffers[i]);
+					glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, _cube_side_enum[i], cube.cubemap, 0);
+				}
 			}
 
 			shadow_cubemaps.push_back(cube);
@@ -2432,17 +2528,42 @@ void RasterizerSceneGLES2::initialize() {
 		glGenFramebuffers(1, &directional_shadow.fbo);
 		glBindFramebuffer(GL_FRAMEBUFFER, directional_shadow.fbo);
 
-		glGenTextures(1, &directional_shadow.depth);
-		glBindTexture(GL_TEXTURE_2D, directional_shadow.depth);
+		glActiveTexture(GL_TEXTURE0);
 
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT16, directional_shadow.size, directional_shadow.size, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, NULL);
+		if (storage->config.depth_tex_supported) {
 
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glGenTextures(1, &directional_shadow.depth);
+			glBindTexture(GL_TEXTURE_2D, directional_shadow.depth);
 
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, directional_shadow.depth, 0);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, directional_shadow.size, directional_shadow.size, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, NULL);
+
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, directional_shadow.depth, 0);
+		} else {
+
+			glGenTextures(1, &directional_shadow.color);
+			glBindTexture(GL_TEXTURE_2D, directional_shadow.color);
+
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, directional_shadow.size, directional_shadow.size, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, directional_shadow.color, 0);
+
+			glGenRenderbuffers(1, &directional_shadow.depth);
+			glBindRenderbuffer(GL_RENDERBUFFER, directional_shadow.depth);
+
+			glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, directional_shadow.size, directional_shadow.size);
+
+			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, directional_shadow.depth);
+		}
 
 		GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 		if (status != GL_FRAMEBUFFER_COMPLETE) {

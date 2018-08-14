@@ -4054,6 +4054,7 @@ void RasterizerStorageGLES2::initialize() {
 	config.float_texture_supported = config.extensions.find("GL_ARB_texture_float") != NULL || config.extensions.find("GL_OES_texture_float") != NULL;
 	config.s3tc_supported = config.extensions.find("GL_EXT_texture_compression_s3tc") != NULL;
 	config.etc1_supported = config.extensions.has("GL_OES_compressed_ETC1_RGB8_texture") != NULL;
+	config.depth_tex_supported = false; // config.extensions.has("GL_OES_depth_texture") != NULL;
 
 	frame.count = 0;
 	frame.delta = 0;

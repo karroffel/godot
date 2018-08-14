@@ -460,9 +460,11 @@ float sample_shadow(highp sampler2D shadow,
 {
 	// vec4 depth_value = texture2D(shadow, pos);
 
-	// return depth_value.z;
+#ifdef DEPTH_READ_SUPPORTED
 	return texture2DProj(shadow, vec4(pos, depth, 1.0)).r;
-	// return (depth_value.x + depth_value.y + depth_value.z + depth_value.w) / 4.0;
+#else
+	return dot(texture2D(shadow, pos), vec4(1.0 / (256.0 * 256.0 * 256.0),1.0 / (256.0 * 256.0),1.0 / 256.0, 1.0));
+#endif
 }
 
 
@@ -813,7 +815,13 @@ FRAGMENT_SHADER_CODE
 #else
 
 #ifdef RENDER_DEPTH
-
+	/*
+	highp float depth = vertex_interp.z;
+	highp vec4 comp = fract(depth * vec4(256.0 * 256.0 * 256.0, 256.0 * 256.0, 256.0, 1.0));
+	comp -= comp.xxyz * vec4(0.0, 1.0 / 256.0, 1.0 / 256.0, 1.0 / 256.0);
+	gl_FragColor = comp;
+	*/
+	gl_FragColor = vec4(1.0);
 #else
 
 #ifdef USE_RADIANCE_MAP
