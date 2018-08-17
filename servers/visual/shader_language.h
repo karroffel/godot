@@ -155,6 +155,7 @@ public:
 		TK_HINT_COLOR,
 		TK_HINT_RANGE,
 		TK_SHADER_TYPE,
+		TK_STENCIL,
 		TK_CURSOR,
 		TK_ERROR,
 		TK_EOF,
@@ -214,6 +215,32 @@ public:
 		INTERPOLATION_SMOOTH,
 	};
 
+	enum StencilFace {
+		STENCIL_FACE_FRONT,
+		STENCIL_FACE_BACK,
+	};
+
+	enum StencilFunc {
+		STENCIL_FUNC_NEVER,
+		STENCIL_FUNC_LESS,
+		STENCIL_FUNC_LEQUAL,
+		STENCIL_FUNC_GREATER,
+		STENCIL_FUNC_GEQUAL,
+		STENCIL_FUNC_EQUAL,
+		STENCIL_FUNC_NOTEQUAL,
+		STENCIL_FUNC_ALWAYS,
+	};
+
+	enum StencilAction {
+		STENCIL_ACTION_KEEP,
+		STENCIL_ACTION_ZERO,
+		STENCIL_ACTION_REPLACE,
+		STENCIL_ACTION_INCR,
+		STENCIL_ACTION_INCR_WRAP,
+		STENCIL_ACTION_DECR,
+		STENCIL_ACTION_DECR_WRAP,
+		STENCIL_ACTION_INVERT,
+	};
 	enum Operator {
 		OP_EQUAL,
 		OP_NOT_EQUAL,
@@ -491,6 +518,20 @@ public:
 		Map<StringName, Varying> varyings;
 		Map<StringName, Uniform> uniforms;
 		Vector<StringName> render_modes;
+
+		struct StencilConfig {
+			bool active;
+			StencilFunc func;
+			StencilAction stencil_fail;
+			StencilAction depth_fail;
+			StencilAction pass;
+
+			StencilConfig() {
+				active = false;
+			}
+		};
+
+		StencilConfig stencil[3];
 
 		Vector<Function> functions;
 

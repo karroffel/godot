@@ -206,6 +206,7 @@ const char *ShaderLanguage::token_names[TK_MAX] = {
 	"HINT_COLOR",
 	"HINT_RANGE",
 	"SHADER_TYPE",
+	"STENCIL",
 	"CURSOR",
 	"ERROR",
 	"EOF",
@@ -302,6 +303,7 @@ const ShaderLanguage::KeyWord ShaderLanguage::keyword_list[] = {
 	{ TK_HINT_COLOR, "hint_color" },
 	{ TK_HINT_RANGE, "hint_range" },
 	{ TK_SHADER_TYPE, "shader_type" },
+	{ TK_STENCIL, "stencil" },
 
 	{ TK_ERROR, NULL }
 };
@@ -3843,6 +3845,168 @@ Error ShaderLanguage::_parse_shader(const Map<StringName, FunctionInfo> &p_funct
 					}
 				}
 			} break;
+
+			case TK_STENCIL: {
+				tk = _get_token();
+
+				StringName side = "";
+
+				if (tk.type == TK_IDENTIFIER) {
+					// stencil back
+					// stencil front
+
+					side = tk.text;
+
+					if (side != String("front") && side != String("back")) {
+						_set_error("Unexpected token " + get_token_text(tk) + " - only 'front' and 'back' are valid");
+						return ERR_PARSE_ERROR;
+					}
+
+					tk = _get_token();
+				}
+
+				ShaderNode::StencilConfig *stencil;
+
+				if (side == "front") {
+					stencil = &shader->stencil[0];
+				} else if (side == "back") {
+					stencil = &shader->stencil[1];
+				} else {
+					stencil = &shader->stencil[2];
+				}
+
+				if (stencil->active) {
+					_set_error("Can't redifine stencil section");
+					return ERR_PARSE_ERROR;
+				}
+
+				if (side == "front" || side == "back") {
+					if (shader->stencil[2].active) {
+						_set_error("Can't define " + side + " face stencil section if a global stencil section exists");
+						return ERR_PARSE_ERROR;
+					}
+				} else {
+					if (shader->stencil[0].active || shader->stencil[1].active) {
+						_set_error("Can't define global stencil section if face specific stencil sections exist");
+						return ERR_PARSE_ERROR;
+					}
+				}
+
+				if (tk.type != TK_CURLY_BRACKET_OPEN) {
+					_set_error("Unexpected token: " + get_token_text(tk) + ", expected {");
+					return ERR_PARSE_ERROR;
+				}
+
+				while (true) {
+
+					tk = _get_token();
+
+					if (tk.type == TK_IDENTIFIER) {
+						StringName id = tk.text;
+
+						if (id == "func" || id == "stencil_fail" || id == "depth_fail" || id == "pass") {
+							// those are allowed
+						} else {
+							_set_error("Unexpected token " + get_token_text(tk) + ", expected 'func', 'stencil_fail', 'depth_fail' or 'pass'");
+							return ERR_PARSE_ERROR;
+						}
+
+						tk = _get_token();
+
+						if (tk.type != TK_COLON) {
+							_set_error("Unexpected token " + get_token_text(tk) + ", expected ':'");
+							return ERR_PARSE_ERROR;
+						}
+
+						tk = _get_token();
+
+						if (tk.type != TK_IDENTIFIER) {
+							_set_error("Unexpected token " + get_token_text(tk) + ", expected ':'");
+							return ERR_PARSE_ERROR;
+						}
+
+						if (id == "func") {
+							StringName func_mode = tk.text;
+
+							if (func_mode == "never") {
+								stencil->func = STENCIL_FUNC_NEVER;
+							} else if (func_mode == "less") {
+								stencil->func = STENCIL_FUNC_LESS;
+							} else if (func_mode == "less_equal") {
+								stencil->func = STENCIL_FUNC_LEQUAL;
+							} else if (func_mode == "greater") {
+								stencil->func = STENCIL_FUNC_GREATER;
+							} else if (func_mode == "greater_equal") {
+								stencil->func = STENCIL_FUNC_GEQUAL;
+							} else if (func_mode == "equal") {
+								stencil->func = STENCIL_FUNC_EQUAL;
+							} else if (func_mode == "not_equal") {
+								stencil->func = STENCIL_FUNC_NOTEQUAL;
+							} else if (func_mode == "always") {
+								stencil->func = STENCIL_FUNC_ALWAYS;
+							} else {
+								_set_error("Invalid stencil func mode. Only allowed modes are 'never', 'less', 'less_equal', 'greater', 'greater_equal', 'equal', 'not_equal' and 'always'");
+								return ERR_PARSE_ERROR;
+							}
+						} else {
+
+							StringName action_name = tk.text;
+
+							StencilAction *action;
+							if (id == "stencil_fail") {
+								action = &stencil->stencil_fail;
+							} else if (id == "depth_fail") {
+								action = &stencil->depth_fail;
+							} else {
+								action = &stencil->pass;
+							}
+
+							if (action_name == "keep") {
+								*action = STENCIL_ACTION_KEEP;
+							} else if (action_name == "zero") {
+								*action = STENCIL_ACTION_ZERO;
+							} else if (action_name == "replace") {
+								*action = STENCIL_ACTION_REPLACE;
+							} else if (action_name == "incr") {
+								*action = STENCIL_ACTION_INCR;
+							} else if (action_name == "incr_wrap") {
+								*action = STENCIL_ACTION_INCR_WRAP;
+							} else if (action_name == "decr") {
+								*action = STENCIL_ACTION_DECR;
+							} else if (action_name == "decr_wrap") {
+								*action = STENCIL_ACTION_DECR_WRAP;
+							} else if (action_name == "invert") {
+								*action = STENCIL_ACTION_INVERT;
+							} else {
+								_set_error("Invalid stencil action. Only allowed actions are 'keep', 'zero', 'replace', 'incr', 'incr_wrap', 'decr', 'decr_wrap' and 'invert'");
+								return ERR_PARSE_ERROR;
+							}
+						}
+
+						tk = _get_token();
+
+						if (tk.type != TK_SEMICOLON) {
+							_set_error("Unexpected token " + get_token_text(tk) + ", expected ':'");
+							return ERR_PARSE_ERROR;
+						}
+
+					} else if (tk.type == TK_CURLY_BRACKET_CLOSE) {
+						break;
+					} else {
+						_set_error("Unexpected token: " + get_token_text(tk));
+						return ERR_PARSE_ERROR;
+					}
+				}
+
+				if (tk.type != TK_CURLY_BRACKET_CLOSE) {
+					_set_error("Unexpected token: " + get_token_text(tk) + ", expected }");
+					return ERR_PARSE_ERROR;
+				}
+
+				stencil->active = true;
+
+			} break;
+
 			case TK_UNIFORM:
 			case TK_VARYING: {
 

@@ -490,6 +490,18 @@ public:
 			bool uses_vertex_lighting;
 			bool uses_world_coordinates;
 
+			bool stencil_enabled;
+
+			// All of those are per-face
+			ShaderLanguage::StencilFunc stencil_funcs[2];
+			uint8_t stencil_func_masks[2];
+			uint8_t stencil_func_refs[2];
+			uint8_t stencil_masks[2];
+
+			ShaderLanguage::StencilAction stencil_action_stencil_fail[2];
+			ShaderLanguage::StencilAction stencil_action_depth_fail[2];
+			ShaderLanguage::StencilAction stencil_action_pass[2];
+
 		} spatial;
 
 		struct Particles {
@@ -536,6 +548,7 @@ public:
 		GLuint ubo_id;
 		uint32_t ubo_size;
 		Map<StringName, Variant> params;
+		Map<StringName, Variant> shader_specific_params;
 		SelfList<Material> list;
 		SelfList<Material> dirty_list;
 		Vector<bool> texture_is_3d;
@@ -565,6 +578,13 @@ public:
 			ubo_size = 0;
 			last_pass = 0;
 			render_priority = 0;
+
+			shader_specific_params["stencil_ref_front"] = Variant();
+			shader_specific_params["stencil_ref_back"] = Variant();
+			shader_specific_params["stencil_func_mask_front"] = Variant();
+			shader_specific_params["stencil_func_mask_back"] = Variant();
+			shader_specific_params["stencil_write_mask_front"] = Variant();
+			shader_specific_params["stencil_write_mask_back"] = Variant();
 		}
 	};
 

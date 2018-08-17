@@ -153,6 +153,7 @@ ShaderTypes::ShaderTypes() {
 	shader_modes[VS::SHADER_SPATIAL].modes.push_back("depth_draw_alpha_prepass");
 
 	shader_modes[VS::SHADER_SPATIAL].modes.push_back("depth_test_disable");
+	shader_modes[VS::SHADER_SPATIAL].modes.push_back("stencil_test_enable");
 
 	shader_modes[VS::SHADER_SPATIAL].modes.push_back("cull_back");
 	shader_modes[VS::SHADER_SPATIAL].modes.push_back("cull_front");

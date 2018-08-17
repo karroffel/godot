@@ -101,6 +101,8 @@
 #define _EXT_COMPRESSED_RGB_BPTC_SIGNED_FLOAT 0x8E8E
 #define _EXT_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT 0x8E8F
 
+#define SL ShaderLanguage
+
 void glTexStorage2DCustom(GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, GLenum format, GLenum type) {
 
 #ifdef GLES_OVER_GL
@@ -1849,6 +1851,19 @@ void RasterizerStorageGLES3::_update_shader(Shader *p_shader) const {
 			p_shader->spatial.writes_modelview_or_projection = false;
 			p_shader->spatial.uses_world_coordinates = false;
 
+			p_shader->spatial.stencil_enabled = false;
+
+			for (int i = 0; i < 2; i++) {
+				p_shader->spatial.stencil_funcs[i] = SL::STENCIL_FUNC_ALWAYS;
+				p_shader->spatial.stencil_func_masks[i] = 0xFF;
+				p_shader->spatial.stencil_func_refs[i] = 0;
+				p_shader->spatial.stencil_masks[i] = 0xFF;
+
+				p_shader->spatial.stencil_action_stencil_fail[i] = SL::STENCIL_ACTION_KEEP;
+				p_shader->spatial.stencil_action_depth_fail[i] = SL::STENCIL_ACTION_KEEP;
+				p_shader->spatial.stencil_action_pass[i] = SL::STENCIL_ACTION_KEEP;
+			}
+
 			shaders.actions_scene.render_mode_values["blend_add"] = Pair<int *, int>(&p_shader->spatial.blend_mode, Shader::Spatial::BLEND_MODE_ADD);
 			shaders.actions_scene.render_mode_values["blend_mix"] = Pair<int *, int>(&p_shader->spatial.blend_mode, Shader::Spatial::BLEND_MODE_MIX);
 			shaders.actions_scene.render_mode_values["blend_sub"] = Pair<int *, int>(&p_shader->spatial.blend_mode, Shader::Spatial::BLEND_MODE_SUB);
@@ -1865,6 +1880,7 @@ void RasterizerStorageGLES3::_update_shader(Shader *p_shader) const {
 
 			shaders.actions_scene.render_mode_flags["unshaded"] = &p_shader->spatial.unshaded;
 			shaders.actions_scene.render_mode_flags["depth_test_disable"] = &p_shader->spatial.no_depth_test;
+			shaders.actions_scene.render_mode_flags["stencil_test_enable"] = &p_shader->spatial.stencil_enabled;
 
 			shaders.actions_scene.render_mode_flags["vertex_lighting"] = &p_shader->spatial.uses_vertex_lighting;
 
@@ -2032,6 +2048,31 @@ void RasterizerStorageGLES3::shader_get_param_list(RID p_shader, List<PropertyIn
 
 		p_param_list->push_back(pi);
 	}
+
+	if (shader->mode == VS::SHADER_SPATIAL) {
+		if (shader->spatial.stencil_enabled) {
+
+			String names[] = {
+				"stencil_ref_front",
+				"stencil_ref_back",
+				"stencil_func_mask_front",
+				"stencil_func_mask_back",
+				"stencil_write_mask_front",
+				"stencil_write_mask_back",
+			};
+
+			for (int i = 0; i < 6; i++) {
+				PropertyInfo pi;
+
+				pi.type = Variant::INT;
+				pi.name = names[i];
+				pi.hint = PROPERTY_HINT_RANGE;
+				pi.hint_string = "0,255";
+
+				p_param_list->push_back(pi);
+			}
+		}
+	}
 }
 
 void RasterizerStorageGLES3::shader_set_default_texture_param(RID p_shader, const StringName &p_name, RID p_texture) {
@@ -2111,10 +2152,27 @@ void RasterizerStorageGLES3::material_set_param(RID p_material, const StringName
 	Material *material = material_owner.get(p_material);
 	ERR_FAIL_COND(!material);
 
-	if (p_value.get_type() == Variant::NIL)
-		material->params.erase(p_param);
-	else
-		material->params[p_param] = p_value;
+	Set<StringName> test;
+	test.insert("stencil_ref_front");
+	test.insert("stencil_ref_back");
+	test.insert("stencil_func_mask_front");
+	test.insert("stencil_func_mask_back");
+	test.insert("stencil_write_mask_front");
+	test.insert("stencil_write_mask_back");
+
+	if (test.has(p_param)) {
+		if (p_value.get_type() == Variant::NIL) {
+			material->shader_specific_params.erase(p_param);
+		} else {
+			material->shader_specific_params[p_param] = p_value;
+		}
+	} else {
+
+		if (p_value.get_type() == Variant::NIL)
+			material->params.erase(p_param);
+		else
+			material->params[p_param] = p_value;
+	}
 
 	_material_make_dirty(material);
 }
@@ -2122,6 +2180,36 @@ Variant RasterizerStorageGLES3::material_get_param(RID p_material, const StringN
 
 	const Material *material = material_owner.get(p_material);
 	ERR_FAIL_COND_V(!material, Variant());
+
+	if (material->shader_specific_params.has(p_param)) {
+
+		Variant value = material->shader_specific_params[p_param];
+
+		if (value.get_type() == Variant::NIL) {
+			// get default values
+
+			if (p_param == "stencil_ref_front") {
+				value = 0;
+			}
+			if (p_param == "stencil_ref_back") {
+				value = 0;
+			}
+			if (p_param == "stencil_func_mask_front") {
+				value = 255;
+			}
+			if (p_param == "stencil_func_mask_back") {
+				value = 255;
+			}
+			if (p_param == "stencil_write_mask_front") {
+				value = 255;
+			}
+			if (p_param == "stencil_write_mask_back") {
+				value = 255;
+			}
+		}
+
+		return value;
+	}
 
 	if (material->params.has(p_param))
 		return material->params[p_param];
@@ -2834,6 +2922,32 @@ void RasterizerStorageGLES3::_update_material(Material *material) {
 	} else {
 		material->textures.clear();
 		material->texture_is_3d.clear();
+	}
+
+	if (material->shader) {
+		for (Map<StringName, Variant>::Element *E = material->shader_specific_params.front(); E; E = E->next()) {
+			StringName key = E->key();
+			Variant value = E->value();
+
+			if (key == "stencil_ref_front") {
+				material->shader->spatial.stencil_func_refs[SL::STENCIL_FACE_FRONT] = value;
+			}
+			if (key == "stencil_ref_back") {
+				material->shader->spatial.stencil_func_refs[SL::STENCIL_FACE_BACK] = value;
+			}
+			if (key == "stencil_func_mask_front") {
+				material->shader->spatial.stencil_func_masks[SL::STENCIL_FACE_FRONT] = value;
+			}
+			if (key == "stencil_func_mask_back") {
+				material->shader->spatial.stencil_func_masks[SL::STENCIL_FACE_BACK] = value;
+			}
+			if (key == "stencil_write_mask_front") {
+				material->shader->spatial.stencil_masks[SL::STENCIL_FACE_FRONT] = value;
+			}
+			if (key == "stencil_write_mask_back") {
+				material->shader->spatial.stencil_masks[SL::STENCIL_FACE_BACK] = value;
+			}
+		}
 	}
 }
 
