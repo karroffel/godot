@@ -329,6 +329,20 @@ String ShaderCompilerGLES3::_dump_node_code(SL::Node *p_node, int p_level, Gener
 				}
 			}
 
+			// stencil config
+			{
+				if (pnode->stencil[2].active) {
+					// one global stencil config.
+					r_gen_code.stencil_configs[0] = pnode->stencil[2];
+					r_gen_code.stencil_configs[1] = pnode->stencil[2];
+				} else {
+					r_gen_code.stencil_configs[0] = pnode->stencil[0];
+					r_gen_code.stencil_configs[1] = pnode->stencil[1];
+				}
+
+				r_gen_code.uses_stencil = r_gen_code.stencil_configs[0].active || r_gen_code.stencil_configs[1].active;
+			}
+
 			int max_texture_uniforms = 0;
 			int max_uniforms = 0;
 

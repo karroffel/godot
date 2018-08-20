@@ -528,6 +528,11 @@ public:
 
 			StencilConfig() {
 				active = false;
+
+				func = STENCIL_FUNC_ALWAYS;
+				stencil_fail = STENCIL_ACTION_KEEP;
+				depth_fail = STENCIL_ACTION_KEEP;
+				pass = STENCIL_ACTION_KEEP;
 			}
 		};
 

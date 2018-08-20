@@ -66,6 +66,9 @@ public:
 
 		bool uses_fragment_time;
 		bool uses_vertex_time;
+
+		bool uses_stencil;
+		ShaderLanguage::ShaderNode::StencilConfig stencil_configs[2];
 	};
 
 private:

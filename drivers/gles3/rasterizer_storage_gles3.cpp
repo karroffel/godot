@@ -1925,6 +1925,16 @@ void RasterizerStorageGLES3::_update_shader(Shader *p_shader) const {
 	p_shader->uses_vertex_time = gen_code.uses_vertex_time;
 	p_shader->uses_fragment_time = gen_code.uses_fragment_time;
 
+	if (gen_code.uses_stencil) {
+		p_shader->spatial.stencil_enabled = true;
+		for (int i = 0; i < 2; i++) {
+			p_shader->spatial.stencil_funcs[i] = gen_code.stencil_configs[i].func;
+			p_shader->spatial.stencil_action_stencil_fail[i] = gen_code.stencil_configs[i].stencil_fail;
+			p_shader->spatial.stencil_action_depth_fail[i] = gen_code.stencil_configs[i].depth_fail;
+			p_shader->spatial.stencil_action_pass[i] = gen_code.stencil_configs[i].pass;
+		}
+	}
+
 	//all materials using this shader will have to be invalidated, unfortunately
 
 	for (SelfList<Material> *E = p_shader->materials.first(); E; E = E->next()) {
@@ -6644,7 +6654,7 @@ void RasterizerStorageGLES3::_render_target_allocate(RenderTarget *rt) {
 		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
 				GL_TEXTURE_2D, rt->depth, 0);
 
 		glGenTextures(1, &rt->color);
@@ -6709,7 +6719,7 @@ void RasterizerStorageGLES3::_render_target_allocate(RenderTarget *rt) {
 		else
 			glRenderbufferStorageMultisample(GL_RENDERBUFFER, msaa, GL_DEPTH24_STENCIL8, rt->width, rt->height);
 
-		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rt->buffers.depth);
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rt->buffers.depth);
 
 		glGenRenderbuffers(1, &rt->buffers.diffuse);
 		glBindRenderbuffer(GL_RENDERBUFFER, rt->buffers.diffuse);

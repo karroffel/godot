@@ -1118,6 +1118,45 @@ bool RasterizerSceneGLES3::_setup_material(RasterizerStorageGLES3::Material *p_m
 		state.current_depth_test = !p_material->shader->spatial.no_depth_test;
 	}
 
+	if (p_material->shader->spatial.stencil_enabled) {
+
+		RasterizerStorageGLES3::Shader::Spatial *spatial = &p_material->shader->spatial;
+
+		glEnable(GL_STENCIL_TEST);
+
+		GLenum faces[2] = { GL_FRONT, GL_BACK };
+		GLenum func[] = {
+			GL_NEVER,
+			GL_LESS,
+			GL_LEQUAL,
+			GL_GREATER,
+			GL_GEQUAL,
+			GL_EQUAL,
+			GL_NOTEQUAL,
+			GL_ALWAYS,
+		};
+
+		GLenum actions[] = {
+			GL_KEEP,
+			GL_ZERO,
+			GL_REPLACE,
+			GL_INCR,
+			GL_INCR,
+			GL_INCR_WRAP,
+			GL_DECR,
+			GL_DECR_WRAP,
+			GL_INVERT,
+		};
+
+		for (int i = 0; i < 2; i++) {
+			glStencilFuncSeparate(faces[i], func[spatial->stencil_funcs[i]], spatial->stencil_func_refs[i], spatial->stencil_func_masks[i]);
+			glStencilMaskSeparate(faces[i], spatial->stencil_masks[i]);
+			glStencilOpSeparate(faces[i], actions[spatial->stencil_action_stencil_fail[i]], actions[spatial->stencil_action_depth_fail[i]], actions[spatial->stencil_action_pass[i]]);
+		}
+	} else {
+		glDisable(GL_STENCIL_TEST);
+	}
+
 	if (state.current_depth_draw != p_material->shader->spatial.depth_draw_mode) {
 		switch (p_material->shader->spatial.depth_draw_mode) {
 			case RasterizerStorageGLES3::Shader::Spatial::DEPTH_DRAW_ALPHA_PREPASS:
@@ -2323,7 +2362,7 @@ void RasterizerSceneGLES3::_add_geometry_with_material(RasterizerStorageGLES3::G
 		if (has_blend_alpha || p_material->shader->spatial.uses_depth_texture || (has_base_alpha && p_material->shader->spatial.depth_draw_mode != RasterizerStorageGLES3::Shader::Spatial::DEPTH_DRAW_ALPHA_PREPASS))
 			return; //bye
 
-		if (!p_material->shader->spatial.uses_alpha_scissor && !p_material->shader->spatial.writes_modelview_or_projection && !p_material->shader->spatial.uses_vertex && !p_material->shader->spatial.uses_discard && p_material->shader->spatial.depth_draw_mode != RasterizerStorageGLES3::Shader::Spatial::DEPTH_DRAW_ALPHA_PREPASS) {
+		if (!p_material->shader->spatial.stencil_enabled && !p_material->shader->spatial.uses_alpha_scissor && !p_material->shader->spatial.writes_modelview_or_projection && !p_material->shader->spatial.uses_vertex && !p_material->shader->spatial.uses_discard && p_material->shader->spatial.depth_draw_mode != RasterizerStorageGLES3::Shader::Spatial::DEPTH_DRAW_ALPHA_PREPASS) {
 			//shader does not use discard and does not write a vertex position, use generic material
 			if (p_instance->cast_shadows == VS::SHADOW_CASTING_SETTING_DOUBLE_SIDED) {
 				p_material = storage->material_owner.getptr(!p_shadow_pass && p_material->shader->spatial.uses_world_coordinates ? default_worldcoord_material_twosided : default_material_twosided);
@@ -3101,6 +3140,7 @@ void RasterizerSceneGLES3::_copy_to_front_buffer(Environment *env) {
 
 	glDepthMask(GL_FALSE);
 	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_STENCIL_TEST);
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_BLEND);
 	glDepthFunc(GL_LEQUAL);
@@ -3603,6 +3643,7 @@ void RasterizerSceneGLES3::_post_process(Environment *env, const CameraMatrix &p
 
 	glDepthMask(GL_FALSE);
 	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_STENCIL_TEST);
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_BLEND);
 	glDepthFunc(GL_LEQUAL);
@@ -4149,6 +4190,9 @@ void RasterizerSceneGLES3::render_scene(const Transform &p_cam_transform, const 
 
 		glColorMask(0, 0, 0, 0);
 		glClearDepth(1.0f);
+
+		glStencilMask(0xFF);
+		glClearStencil(0);
 		glClear(GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
 		render_list.clear();
@@ -4340,6 +4384,7 @@ void RasterizerSceneGLES3::render_scene(const Transform &p_cam_transform, const 
 				glDisable(GL_BLEND);
 				glDepthMask(GL_FALSE);
 				glDisable(GL_DEPTH_TEST);
+				glDisable(GL_STENCIL_TEST);
 				glDisable(GL_CULL_FACE);
 
 				glActiveTexture(GL_TEXTURE0);
@@ -4783,6 +4828,7 @@ void RasterizerSceneGLES3::render_shadow(RID p_light, RID p_shadow_atlas, int p_
 			glClear(GL_DEPTH_BUFFER_BIT);
 			glDisable(GL_SCISSOR_TEST);
 			//glDisable(GL_DEPTH_TEST);
+			glDisable(GL_STENCIL_TEST);
 			glDisable(GL_BLEND);
 
 			_copy_screen();
