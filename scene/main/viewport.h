@@ -411,6 +411,7 @@ public:
 	void set_update_mode(UpdateMode p_mode);
 	UpdateMode get_update_mode() const;
 	Ref<ViewportTexture> get_texture() const;
+	void read_depth_stencil(const Ref<ImageTexture> &p_texture) const;
 
 	void set_shadow_atlas_size(int p_size);
 	int get_shadow_atlas_size() const;

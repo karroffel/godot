@@ -432,6 +432,13 @@ RID VisualServerViewport::viewport_get_texture(RID p_viewport) const {
 	return VSG::storage->render_target_get_texture(viewport->render_target);
 }
 
+void VisualServerViewport::viewport_read_depth_stencil(RID p_viewport, RID p_texture) const {
+	const Viewport *viewport = viewport_owner.getornull(p_viewport);
+	ERR_FAIL_COND(!viewport);
+
+	VSG::storage->render_target_read_depth_stencil(viewport->render_target, p_texture);
+}
+
 void VisualServerViewport::viewport_set_hide_scenario(RID p_viewport, bool p_hide) {
 
 	Viewport *viewport = viewport_owner.getornull(p_viewport);

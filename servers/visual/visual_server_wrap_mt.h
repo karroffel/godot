@@ -382,6 +382,7 @@ public:
 	FUNC2(viewport_set_vflip, RID, bool)
 
 	FUNC1RC(RID, viewport_get_texture, RID)
+	FUNC2(viewport_read_depth_stencil, RID, RID)
 
 	FUNC2(viewport_set_hide_scenario, RID, bool)
 	FUNC2(viewport_set_hide_canvas, RID, bool)

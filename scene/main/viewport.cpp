@@ -1109,6 +1109,12 @@ Ref<ViewportTexture> Viewport::get_texture() const {
 	return default_texture;
 }
 
+void Viewport::read_depth_stencil(const Ref<ImageTexture> &p_texture) const {
+	ERR_FAIL_COND(p_texture.is_null());
+
+	VS::get_singleton()->viewport_read_depth_stencil(viewport, p_texture->get_rid());
+}
+
 void Viewport::set_vflip(bool p_enable) {
 
 	vflip = p_enable;
@@ -2760,6 +2766,7 @@ void Viewport::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_render_info", "info"), &Viewport::get_render_info);
 
 	ClassDB::bind_method(D_METHOD("get_texture"), &Viewport::get_texture);
+	ClassDB::bind_method(D_METHOD("read_depth_stencil", "texture"), &Viewport::read_depth_stencil);
 
 	ClassDB::bind_method(D_METHOD("set_physics_object_picking", "enable"), &Viewport::set_physics_object_picking);
 	ClassDB::bind_method(D_METHOD("get_physics_object_picking"), &Viewport::get_physics_object_picking);

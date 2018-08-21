@@ -7020,6 +7020,61 @@ RID RasterizerStorageGLES3::render_target_get_texture(RID p_render_target) const
 	return rt->texture;
 }
 
+void RasterizerStorageGLES3::render_target_read_depth_stencil(RID p_render_target, RID p_texture) const {
+	RenderTarget *rt = render_target_owner.getornull(p_render_target);
+	ERR_FAIL_COND(!rt);
+
+	Texture *t = texture_owner.getornull(p_texture);
+	ERR_FAIL_COND(!t);
+	ERR_FAIL_COND(t->width != rt->width);
+	ERR_FAIL_COND(t->height != rt->height);
+	ERR_FAIL_COND(t->format != Image::FORMAT_RGBA8);
+
+#ifdef GLES_OVER_GL
+	PoolVector<uint8_t> data;
+
+	int data_size = rt->width * rt->height * 4;
+
+	data.resize(data_size);
+
+	PoolVector<uint8_t>::Write wb = data.write();
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, rt->depth);
+
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+
+	glPixelStorei(GL_PACK_ALIGNMENT, 1);
+	glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, &wb[0]);
+
+	GLenum err = glGetError();
+	if (err != GL_NO_ERROR) {
+		printf("ERROR!! %d\n", err);
+		return;
+	}
+
+	{
+		for (int row = 0; row < t->height; row++) {
+			for (int col = 0; col < t->width; col++) {
+				int offset = row * t->width * 4 + col * 4;
+
+				uint8_t stencil = wb[offset + 3];
+				printf("%d ", stencil);
+			}
+			printf("\n");
+		}
+	}
+
+	Ref<Image> image_data = memnew(Image(rt->width, rt->height, false, Image::FORMAT_RGBA8, data));
+
+	const_cast<RasterizerStorageGLES3 *>(this)->texture_set_data_partial(p_texture, image_data, 0, 0, rt->width, rt->height, 0, 0, 0, 0);
+#else
+	bool you_are_not_using_desktop_gl = true;
+	ERR_EXPLAIN("Can't read depth-stencil from OpenGL ES :(");
+	ERR_FAIL_COND(you_are_not_using_desktop_gl);
+#endif
+}
+
 void RasterizerStorageGLES3::render_target_set_flag(RID p_render_target, RenderTargetFlags p_flag, bool p_value) {
 
 	RenderTarget *rt = render_target_owner.getornull(p_render_target);

@@ -3752,6 +3752,9 @@ RID RasterizerStorageGLES2::render_target_get_texture(RID p_render_target) const
 	return rt->texture;
 }
 
+void RasterizerStorageGLES2::render_target_read_depth_stencil(RID p_render_target, RID p_texture) const {
+}
+
 void RasterizerStorageGLES2::render_target_set_flag(RID p_render_target, RenderTargetFlags p_flag, bool p_value) {
 	RenderTarget *rt = render_target_owner.getornull(p_render_target);
 	ERR_FAIL_COND(!rt);

@@ -457,6 +457,7 @@ public:
 	BIND2(viewport_set_vflip, RID, bool)
 
 	BIND1RC(RID, viewport_get_texture, RID)
+	BIND2(viewport_read_depth_stencil, RID, RID)
 
 	BIND2(viewport_set_hide_scenario, RID, bool)
 	BIND2(viewport_set_hide_canvas, RID, bool)
